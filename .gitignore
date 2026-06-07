@@ -1,0 +1,6 @@
+runs/
+训练集/
+旧版/
+models/*.pt
+__pycache__/
+.idea

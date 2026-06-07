@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中央大脑 · 异构多机器人调度系统</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Microsoft YaHei',sans-serif}
+  body{background:#0a1628;color:#e0e0e0;padding:20px}
+  h1{font-size:24px;margin-bottom:16px}
+  h1 small{font-size:13px;color:#888;font-weight:normal}
+  .bar-top{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+  .btn{padding:8px 20px;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#fff}
+  .btn-refresh{background:#2B579A}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:16px}
+  .card{background:#1a2744;border-radius:12px;padding:16px;border:1px solid #2a3a5c}
+  .card h2{font-size:14px;color:#7aa2e7;margin-bottom:8px}
+  .card h2 span{float:right}
+  .row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #0a1628}
+  .row:last-child{border:none}
+  .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold}
+  .tag-dog{background:#1b5e20;color:#a5d6a7}
+  .tag-drone{background:#0d47a1;color:#90caf9}
+  .val-ok{color:#4caf50}.val-warning{color:#ff9800}.val-error{color:#f44336}
+  .bat-bar{height:6px;background:#0a1628;border-radius:3px;overflow:hidden;margin-top:4px;display:inline-block;width:80px;vertical-align:middle}
+  .bat-fill{height:100%;border-radius:3px}
+  .cmd-box{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .cmd-btn{padding:4px 12px;border:1px solid #2a3a5c;border-radius:6px;background:#0a1628;color:#ccc;cursor:pointer;font-size:12px}
+  .cmd-btn:hover{background:#2a3a5c;color:#fff}
+  .feed{width:100%;height:180px;object-fit:cover;border-radius:8px;background:#0a1628;margin-bottom:8px;display:block}
+  .footer{text-align:center;font-size:11px;color:#444;margin-top:20px}
+  .empty{font-size:13px;color:#666;padding:20px;text-align:center}
+</style>
+</head>
+<body>
+<h1>&#129302; 中央大脑 <small id="subtitle">加载中...</small></h1>
+<div class="bar-top">
+  <button class="btn btn-refresh" onclick="fetchStatus()">&#8635; 刷新</button>
+  <span id="summary" style="font-size:13px;color:#888"></span>
+</div>
+<div class="grid" id="robotGrid"></div>
+<div class="footer">中央大脑 v1.0 · 异构多机器人调度系统 · 自动刷新</div>
+
+<script>
+function fetchStatus(){
+  fetch('/api/status').then(function(r){return r.json()}).then(function(d){
+    document.getElementById('subtitle').textContent = d.total + ' 台设备 | ' + d.online + ' 在线';
+    document.getElementById('summary').textContent = '总数 ' + d.total + ' · 在线 ' + d.online + ' · 离线 ' + (d.total - d.online);
+    var grid = document.getElementById('robotGrid');
+    if(!d.robots || !d.robots.length){
+      grid.innerHTML = '<div class="empty">暂无注册机器人</div>'; return;
+    }
+    grid.innerHTML = d.robots.map(function(r){
+      var tag = r.type === 'dog' ? '<span class="tag tag-dog">&#128054; 机器狗</span>' : r.type === 'drone' ? '<span class="tag tag-drone">&#128140; 无人机</span>' : '';
+      var hc = 'val-' + r.health;
+      var batPct = Math.round(r.battery * 100);
+      var batCol = batPct > 50 ? '#4caf50' : batPct > 20 ? '#ff9800' : '#f44336';
+      var extra = '';
+      if(r.extra) for(var k in r.extra) extra += '<div class="row"><span>' + k + '</span><span>' + r.extra[k] + '</span></div>';
+      return '<div class="card">' +
+        '<img class="feed" src="/api/video_feed/' + r.id + '" onerror="this.style.display=\'none\'" alt="feed">' +
+        '<h2>' + r.id + tag + '</h2>' +
+        '<div class="row"><span>状态</span><span class="' + hc + '">' + r.health + '</span></div>' +
+        '<div class="row"><span>模式</span><span>' + r.mode + '</span></div>' +
+        '<div class="row"><span>电量</span><span>' + batPct + '% <div class="bat-bar"><div class="bat-fill" style="width:' + batPct + '%;background:' + batCol + '"></div></div></span></div>' +
+        '<div class="row"><span>通信</span><span>L' + r.comm_level + '</span></div>' +
+        extra +
+        '<div class="cmd-box">' +
+        '<button class="cmd-btn" onclick="sendCmd(\'' + r.id + '\',\'stand\')">起立</button>' +
+        '<button class="cmd-btn" onclick="sendCmd(\'' + r.id + '\',\'patrol\')">巡逻</button>' +
+        '<button class="cmd-btn" onclick="sendCmd(\'' + r.id + '\',\'stop\')">停止</button>' +
+        '<button class="cmd-btn" onclick="sendCmd(\'' + r.id + '\',\'alert\')" style="color:#f44336">急停</button>' +
+        '</div></div>';
+    }).join('');
+  }).catch(function(){document.getElementById('subtitle').textContent = '无法连接中央大脑';});
+}
+function sendCmd(id, cmd){
+  fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({robot_id:id,command:cmd})})
+    .then(function(r){return r.json()}).then(fetchStatus).catch(console.error);
+}
+fetchStatus();
+setInterval(fetchStatus, 3000);
+</script>
+</body>
+</html>
