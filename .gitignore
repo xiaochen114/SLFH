@@ -25,4 +25,7 @@ deepseek_data*.zip
 # 环境 / 运行时
 .hermes/
 .env
+
+# 日志
 *.log
+data/logs/
