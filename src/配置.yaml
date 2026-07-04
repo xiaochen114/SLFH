@@ -1,0 +1,21 @@
+# 森林防火巡逻系统 - 配置
+# 唯一配置源，所有参数在此修改
+# --- 火情检测模型 ---
+model_path: "E:/zy/runs/detect/fire_smoke_cigarette_3class/weights/best.pt"
+conf_thresh: 0.5
+detect_interval: 0.2
+# --- 摄像头 ---
+camera_url: 0
+frame_width: 640
+frame_height: 480
+# --- 机器狗网络 ---
+motion_ip: "192.168.1.120"
+cmd_port: 43893
+state_port: 43894
+# --- 运动参数 ---
+forward_speed: 20000
+safe_dist: 0.5
+sensor_type: "ultrasonic"
+# --- Web面板 ---
+http_host: "0.0.0.0"
+http_port: 5000

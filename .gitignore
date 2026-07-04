@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# 敏感
+data/api_keys.json
+data/chat_history.json
+
+# 大文件
+models/
+runs/
+训练集/
+归档/
+第三方/
+*.zip
+*.pdf
+*.docx
+*.jpg
+*.png
+.idea/
+deepseek_data*.zip
+巡逻点_test.yaml
+
+# 环境 / 运行时
+.hermes/
+.env
+*.log
