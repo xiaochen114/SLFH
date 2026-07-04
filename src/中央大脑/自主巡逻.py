@@ -70,16 +70,19 @@ class 自主巡逻:
         self._points.append(巡逻点(x=x, y=y, yaw=yaw, name=name or f"点{idx}"))
         self.状态.总点数 = len(self._points)
         self._log(f"添加 {self._points[-1].name}")
+        self.保存配置()
 
     def 删除点(self, index):
         if 0 <= index < len(self._points):
             p = self._points.pop(index)
             self.状态.总点数 = len(self._points)
             self._log(f"删除 {p.name}")
+            self.保存配置()
 
     def 清空点(self):
         self._points.clear()
         self.状态.总点数 = 0
+        self.保存配置()
 
     def 获取点列表(self):
         return [{"index": i, "x": p.x, "y": p.y, "yaw": p.yaw, "name": p.name}
@@ -111,7 +114,8 @@ class 自主巡逻:
         self._stop = True
         self.状态.运行中 = False
         self.状态.状态 = "idle"
-        self._ph.cancel_goal()
+        if self._ph:
+            self._ph.cancel_goal()
         self._log("巡逻停止")
 
     def _巡逻循环(self):
@@ -171,7 +175,11 @@ class 自主巡逻:
         print(entry)
 
     def 获取状态(self):
-        nav = self._ph.get_status()
+        nav_running = nav_state = False
+        if self._ph:
+            nav = self._ph.get_status()
+            nav_running = nav.running
+            nav_state = nav.state
         return {
             "巡逻运行中": self.状态.运行中,
             "巡逻状态": self.状态.状态,
@@ -179,8 +187,8 @@ class 自主巡逻:
             "当前点坐标": (self.状态.当前点.x, self.状态.当前点.y) if self.状态.当前点 else None,
             "当前索引": self.状态.当前点索引 + 1,
             "总点数": self.状态.总点数,
-            "导航运行中": nav.running,
-            "导航状态": nav.state,
+            "导航运行中": nav_running,
+            "导航状态": nav_state,
             "日志": self.状态.日志[-20:],
         }
 

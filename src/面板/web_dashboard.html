@@ -338,14 +338,27 @@ async function loadPatrol(){
 }
 async function patrolAdd(){
   const n=$('ptName').value,x=parseFloat($('ptX').value),y=parseFloat($('ptY').value),yaw=parseFloat($('ptYaw').value)||0;
-  if(isNaN(x)||isNaN(y)) return;
-  await api('/patrol/points',{method:'POST',body:JSON.stringify({x,y,yaw,name:n})});
-  $('ptName').value='';$('ptX').value='';$('ptY').value='';
-  loadPatrol();
+  if(isNaN(x)||isNaN(y)){alert('请填写 X 和 Y 坐标');return;}
+  const res=await api('/patrol/points',{method:'POST',body:JSON.stringify({x,y,yaw,name:n})});
+  if(res.code===200){
+    $('ptName').value='';$('ptX').value='';$('ptY').value='';
+    loadPatrol();
+  }else{
+    alert('添加失败: '+(res.message||'未知错误'));
+  }
 }
-async function patrolDel(i){await api('/patrol/points/'+i,{method:'DELETE'});loadPatrol();}
-async function patrolStart(){await api('/patrol/start',{method:'POST'});loadPatrol();addAlert({level:'info',message:'巡逻已启动',time:Date.now()/1000});}
-async function patrolStop(){await api('/patrol/stop',{method:'POST'});loadPatrol();addAlert({level:'info',message:'巡逻已停止',time:Date.now()/1000});}
+async function patrolDel(i){
+  const res=await api('/patrol/points/'+i,{method:'DELETE'});
+  if(res.code===200){loadPatrol();}else{alert('删除失败');}
+}
+async function patrolStart(){
+  const res=await api('/patrol/start',{method:'POST'});
+  if(res.code===200){loadPatrol();addAlert({level:'info',message:'巡逻已启动',time:Date.now()/1000});}else{alert('启动失败: '+(res.message||''));}
+}
+async function patrolStop(){
+  const res=await api('/patrol/stop',{method:'POST'});
+  if(res.code===200){loadPatrol();addAlert({level:'info',message:'巡逻已停止',time:Date.now()/1000});}else{alert('停止失败: '+(res.message||''));}
+}
 
 async function loadHistory(type){
   $('histTabTasks').className='btn'+(type==='tasks'?' active':'');
