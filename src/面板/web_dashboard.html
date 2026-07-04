@@ -331,10 +331,16 @@ async function loadPatrol(){
   const list=pts.data||[];
   const c=$('patrolList');
   if(!list.length){c.innerHTML='<div class="empty">暂无巡逻点</div>';return;}
-  c.innerHTML=list.map((p,i)=>
-    '<div class="patrol-item"><span><span class="pt-name">'+(p.name||'点'+(i+1))+'</span> ('+p.x+', '+p.y+') 朝向='+p.yaw+'</span>'+
-    '<button class="btn btn-danger btn-sm" onclick="patrolDel('+i+')">删除</button></div>'
-  ).join('');
+  c.innerHTML='<div style="display:grid;grid-template-columns:40px 1fr 100px 100px;gap:0;font-size:12px;background:#f8f9fb;padding:8px 14px;border-bottom:1px solid #e4e6ea;color:#9ca3af;font-weight:500">'+
+    '<span>#</span><span>名称</span><span>X</span><span>Y</span></div>'+
+    list.map((p,i)=>
+      '<div class="patrol-item" style="display:grid;grid-template-columns:40px 1fr 100px 100px;gap:0;align-items:center">'+
+      '<span style="color:#9ca3af">'+(i+1)+'</span>'+
+      '<span class="pt-name">'+(p.name||'点'+(i+1))+'</span>'+
+      '<span style="font-variant-numeric:tabular-nums">'+p.x+'</span>'+
+      '<span style="display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums">'+p.y+
+        '<button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="patrolDel('+i+')">删除</button></span></div>'
+    ).join('');
 }
 async function patrolAdd(){
   const n=$('ptName').value,x=parseFloat($('ptX').value),y=parseFloat($('ptY').value),yaw=parseFloat($('ptYaw').value)||0;
