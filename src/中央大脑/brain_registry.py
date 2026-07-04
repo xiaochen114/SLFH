@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
+"""机器人注册中心 — 注册/注销/健康检查/全景导出"""
 import time, threading
 from typing import Dict, Optional
 from 机器人.robot_base import RobotBase
 
+
 class 机器人注册中心:
-    def __init__(self):
+    def __init__(self, event_bus=None):
         self._robots: Dict[str, RobotBase] = {}
         self._last_heartbeat: Dict[str, float] = {}
         self._lock = threading.Lock()
         self._stop = False
+        self._event_bus = event_bus
         t = threading.Thread(target=self._健康检查循环, daemon=True)
         t.start()
 
@@ -56,6 +59,10 @@ class 机器人注册中心:
                     gap = now - last
                     if gap > 30:
                         print(f"[注册中心] {rid} 超时断连 ({gap:.0f}s)")
+                        if self._event_bus:
+                            self._event_bus.发布("robot_disconnected", {
+                                "robot_id": rid, "elapsed": gap,
+                            })
                         robot = self._robots.get(rid)
                         if robot:
                             robot.on_communication_lost()
@@ -65,10 +72,20 @@ class 机器人注册中心:
         for rid, robot in self._robots.items():
             try:
                 s = robot.get_status()
-                robots_info.append({"id": rid, "type": s.robot_type, "battery": s.battery, "mode": s.mode, "health": s.health, "comm_level": s.communication_level, "extra": s.extra})
+                robots_info.append({
+                    "id": rid, "type": s.robot_type,
+                    "battery": s.battery, "mode": s.mode,
+                    "health": s.health, "comm_level": s.communication_level,
+                    "position": list(s.position) if s.position else None,
+                    "extra": s.extra,
+                })
             except:
                 robots_info.append({"id": rid, "error": "状态获取失败"})
-        return {"total": len(self._robots), "online": len(self.获取在线列表()), "robots": robots_info}
+        return {
+            "total": len(self._robots),
+            "online": len(self.获取在线列表()),
+            "robots": robots_info,
+        }
 
     def 停止(self):
         self._stop = True
