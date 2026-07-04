@@ -30,13 +30,12 @@ class 中央大脑:
         self.告警 = 监控告警(self.事件总线, self.db)
         self._running = False
 
-        # 自主巡逻
+        # 巡逻模块（点管理始终可用）
+        self.patrol = 自主巡逻(None)
+        self.patrol.加载配置()
         self.感知主机 = None
-        self.patrol = None
         if 启用巡逻:
             self.感知主机 = 感知主机控制()
-            self.patrol = 自主巡逻(self.感知主机)
-            self.patrol.加载配置()
 
         self.web = Web面板(
             self.registry, self.comm, self.db, self.告警, self.事件总线,

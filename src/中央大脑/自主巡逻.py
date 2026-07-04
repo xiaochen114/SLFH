@@ -91,8 +91,8 @@ class 自主巡逻:
         if not self._points:
             self._log("无巡逻点，请先添加")
             return False
-        if not self._ph.connected:
-            self._log("感知主机未连接")
+        if not self._ph or not self._ph.connected:
+            self._log("感知主机未连接，无法开始巡逻。请使用 --patrol 参数启动")
             return False
         if not self._ph.is_nav_running():
             self._log("导航未启动，正在启动...")
