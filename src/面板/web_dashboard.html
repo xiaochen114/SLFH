@@ -5,238 +5,186 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>中央大脑 · 多机器人调度系统</title>
 <style>
-  /* ======================== 基础重置 ======================== */
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'Microsoft YaHei','PingFang SC',-apple-system,sans-serif;
-       background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+       background:#edeff2;color:#1e2024;min-height:100vh}
 
-  /* ======================== 顶栏 ======================== */
-  .header{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:0 32px;
-           height:64px;display:flex;align-items:center;gap:16px;
-           position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.15)}
-  .header .logo{display:flex;align-items:center;gap:10px;color:#fff}
-  .header .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,#0f3460,#533483);
-                     border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
-  .header h1{font-size:16px;font-weight:600;color:#fff;letter-spacing:.5px}
-  .header h1 small{font-size:11px;color:#8899bb;font-weight:400;margin-left:8px}
-  .header .status-badge{margin-left:auto;display:flex;align-items:center;gap:12px}
-  .header .status-badge .dot{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:pulse 2s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-  .header .status-badge span{color:#99aacd;font-size:13px}
+  .header{background:#1e2024;padding:0 32px;height:56px;
+          display:flex;align-items:center;position:sticky;top:0;z-index:100}
+  .header h1{font-size:15px;font-weight:600;color:#fff;letter-spacing:1px}
+  .header h1 small{color:#6b7280;font-weight:400;margin-left:12px;font-size:11px}
+  .header .status-badge{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .header .status-badge .dot{width:6px;height:6px;border-radius:50%;background:#22c55e}
+  .header .status-badge span{color:#9ca3af;font-size:12px}
 
-  /* ======================== 导航标签 ======================== */
-  .tabs{display:flex;gap:4px;padding:16px 32px 0;background:#f0f2f5}
-  .tab{padding:10px 24px;cursor:pointer;font-size:14px;color:#666;
-       border-radius:10px 10px 0 0;transition:all .25s;user-select:none;
-       display:flex;align-items:center;gap:6px}
-  .tab:hover{color:#1a1a2e;background:rgba(26,26,46,.05)}
-  .tab.active{color:#1a1a2e;background:#fff;font-weight:600;box-shadow:0 -2px 8px rgba(0,0,0,.06)}
-  .tab .icon{font-size:16px}
+  .tabs{display:flex;padding:0 32px;background:#edeff2;border-bottom:1px solid #d4d7dd}
+  .tab{padding:12px 24px;cursor:pointer;font-size:13px;color:#6b7280;
+       border-bottom:2px solid transparent;transition:all .2s;user-select:none}
+  .tab:hover{color:#1e2024}
+  .tab.active{color:#1e2024;border-bottom-color:#2563eb;font-weight:600}
 
-  /* ======================== 内容区 ======================== */
   .content{display:none;padding:20px 32px 32px}
   .content.active{display:block}
-  .page-section{background:#fff;border-radius:14px;padding:24px;
-                box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:20px}
-  .page-section h3{font-size:15px;color:#1a1a2e;margin-bottom:16px;
-                   display:flex;align-items:center;gap:8px}
-  .page-section h3 .badge{background:#e8f0fe;color:#2563eb;font-size:11px;
-                           padding:2px 10px;border-radius:12px;font-weight:500}
+  .page-section{background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;border:1px solid #e4e6ea}
+  .page-section h3{font-size:12px;color:#6b7280;margin-bottom:14px;font-weight:500}
 
-  /* ======================== 统计卡片 ======================== */
-  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px}
-  .stat-card{background:#fff;border-radius:14px;padding:20px 24px;
-             box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;align-items:center;gap:16px;
-             transition:transform .2s,box-shadow .2s}
-  .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
-  .stat-card .stat-icon{width:48px;height:48px;border-radius:12px;display:flex;
-                        align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
-  .stat-card .stat-icon.blue{background:#e8f0fe;color:#2563eb}
-  .stat-card .stat-icon.green{background:#e6f7ee;color:#16a34a}
-  .stat-card .stat-icon.orange{background:#fef3e2;color:#ea580c}
-  .stat-card .stat-icon.purple{background:#f0e6ff;color:#7c3aed}
-  .stat-card .stat-info{min-width:0}
-  .stat-card .stat-info .num{font-size:28px;font-weight:700;color:#1a1a2e;line-height:1.2}
-  .stat-card .stat-info .lbl{font-size:12px;color:#888;margin-top:2px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+  .stat-card{background:#fff;border-radius:8px;padding:20px;border:1px solid #e4e6ea}
+  .stat-card .num{font-size:28px;font-weight:700;color:#1e2024;line-height:1.2;font-variant-numeric:tabular-nums}
+  .stat-card .lbl{font-size:11px;color:#9ca3af;margin-top:4px}
 
-  /* ======================== 机器人卡片网格 ======================== */
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-  .card{background:#fff;border-radius:14px;padding:20px;border:1px solid #eef0f4;
-        transition:all .25s;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-  .card:hover{border-color:#c7d2e0;box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-2px)}
-  .card .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-  .card .card-header h3{font-size:15px;font-weight:600;color:#1a1a2e;display:flex;align-items:center;gap:8px}
-  .card .card-body{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}
-  .card .card-body .row{font-size:13px;display:flex;justify-content:space-between;padding:4px 0;
-                         border-bottom:1px solid #f5f6f8}
-  .card .card-body .row:last-child{border:none}
-  .card .card-body .row .label{color:#888}
-  .card .card-body .row .val{font-weight:500;color:#1a1a2e}
-  .card .card-footer{display:flex;gap:6px;margin-top:14px;padding-top:14px;border-top:1px solid #f0f2f5;flex-wrap:wrap}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+  .card{background:#fff;border-radius:8px;padding:16px 20px;border:1px solid #e4e6ea;transition:border-color .2s}
+  .card:hover{border-color:#9ca3af}
+  .card .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #f0f2f5}
+  .card .card-header h3{font-size:14px;font-weight:600;color:#1e2024;margin-bottom:0}
+  .card .card-body{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}
+  .card .card-body .row{font-size:12px;display:flex;justify-content:space-between;padding:3px 0}
+  .card .card-body .row .label{color:#9ca3af}
+  .card .card-body .row .val{font-weight:500;color:#1e2024;font-variant-numeric:tabular-nums}
+  .card .card-footer{display:flex;gap:4px;margin-top:12px;padding-top:10px;border-top:1px solid #f0f2f5;flex-wrap:wrap}
 
-  /* ======================== 标签 ======================== */
-  .tag{display:inline-flex;align-items:center;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
-  .tag-dog{background:#e6f7ee;color:#16a34a}
-  .tag-drone{background:#e8f0fe;color:#2563eb}
-  .status-ok{color:#16a34a}.status-warning{color:#ea580c}.status-error{color:#dc2626}
+  .tag{display:inline-flex;padding:1px 8px;border-radius:3px;font-size:10px;font-weight:600}
+  .tag-dog{background:#dcfce7;color:#15803d}
+  .tag-drone{background:#dbeafe;color:#1d4ed8}
+  .status-ok{color:#15803d}
+  .status-warning{color:#d97706}
+  .status-error{color:#dc2626}
 
-  /* ======================== 按钮 ======================== */
-  .btn{display:inline-flex;align-items:center;gap:4px;padding:7px 16px;border:none;
-       border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;
-       font-family:inherit}
-  .btn-default{background:#f0f2f5;color:#444}.btn-default:hover{background:#e4e7ec}
+  .btn{display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border:none;
+       border-radius:4px;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;font-family:inherit}
+  .btn-default{background:#f0f2f5;color:#4b5563}.btn-default:hover{background:#e4e6ea}
   .btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}
-  .btn-success{background:#16a34a;color:#fff}.btn-success:hover{background:#15803d}
+  .btn-success{background:#15803d;color:#fff}.btn-success:hover{background:#166534}
   .btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#b91c1c}
-  .btn-sm{padding:5px 12px;font-size:11px}
-  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-sm{padding:4px 10px;font-size:10px}
 
-  /* ======================== 电量条 ======================== */
-  .bat-bar{height:6px;background:#f0f2f5;border-radius:3px;overflow:hidden;display:inline-block;width:60px;vertical-align:middle}
-  .bat-fill{height:100%;border-radius:3px;transition:width .5s}
+  .bat-bar{height:4px;background:#f0f2f5;display:inline-block;width:50px;vertical-align:middle}
+  .bat-fill{height:100%;transition:width .5s}
 
-  /* ======================== 告警列表 ======================== */
-  .alert-list{border-radius:12px;overflow:hidden;border:1px solid #f0f2f5}
-  .alert-item{padding:12px 16px;border-bottom:1px solid #f5f6f8;font-size:13px;
-              display:flex;gap:12px;align-items:start;background:#fff}
+  .alert-list{border:1px solid #e4e6ea;border-radius:6px;overflow:hidden}
+  .alert-item{padding:10px 14px;border-bottom:1px solid #f0f2f5;font-size:12px;
+              display:flex;gap:10px;align-items:start;background:#fff}
   .alert-item:last-child{border:none}
-  .alert-item .time{color:#999;white-space:nowrap;min-width:56px;font-size:12px}
-  .alert-item .alert-icon{flex-shrink:0;width:20px;text-align:center}
-  .alert-error .alert-icon{color:#dc2626}.alert-warning .alert-icon{color:#ea580c}.alert-info .alert-icon{color:#2563eb}
+  .alert-item .time{color:#9ca3af;white-space:nowrap;min-width:52px;font-size:11px;font-variant-numeric:tabular-nums}
+  .alert-item .level-tag{font-size:10px;padding:1px 6px;border-radius:2px;font-weight:600}
+  .alert-error .level-tag{background:#fef2f2;color:#dc2626}
+  .alert-warning .level-tag{background:#fffbeb;color:#d97706}
+  .alert-info .level-tag{background:#eff6ff;color:#2563eb}
+  .alert-error{border-left:3px solid #dc2626}
+  .alert-warning{border-left:3px solid #d97706}
+  .alert-info{border-left:3px solid #2563eb}
 
-  /* ======================== 输入框 ======================== */
-  input{padding:8px 12px;border:1px solid #dde0e6;border-radius:8px;font-size:13px;
-        color:#1a1a2e;outline:none;transition:border-color .2s;font-family:inherit;background:#fff}
-  input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+  input{padding:7px 10px;border:1px solid #d4d7dd;border-radius:4px;font-size:12px;
+        color:#1e2024;outline:none;transition:border-color .15s;font-family:inherit;background:#fff}
+  input:focus{border-color:#2563eb}
   input::placeholder{color:#b0b6c4}
 
-  /* ======================== 巡逻 ======================== */
-  .patrol-controls{display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
+  .patrol-controls{display:flex;gap:6px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
   .patrol-controls input{width:80px}
-  .patrol-list{border-radius:12px;overflow:hidden;border:1px solid #f0f2f5}
-  .patrol-item{padding:12px 16px;border-bottom:1px solid #f5f6f8;display:flex;
-               justify-content:space-between;align-items:center;font-size:13px;background:#fff}
+  .patrol-list{border:1px solid #e4e6ea;border-radius:6px;overflow:hidden}
+  .patrol-item{padding:10px 14px;border-bottom:1px solid #f0f2f5;display:flex;
+               justify-content:space-between;align-items:center;font-size:12px;background:#fff}
   .patrol-item:last-child{border:none}
-  .patrol-item .pt-name{font-weight:600;margin-right:8px}
+  .patrol-item .pt-name{font-weight:600;margin-right:8px;color:#1e2024}
 
-  /* ======================== 表格 ======================== */
-  .hist-table{width:100%;border-collapse:collapse;font-size:13px}
-  .hist-table th{padding:10px 14px;text-align:left;color:#888;border-bottom:2px solid #f0f2f5;font-weight:500;white-space:nowrap}
-  .hist-table td{padding:9px 14px;border-bottom:1px solid #f5f6f8;color:#444}
+  .hist-table{width:100%;border-collapse:collapse;font-size:12px}
+  .hist-table th{padding:8px 12px;text-align:left;color:#9ca3af;border-bottom:2px solid #e4e6ea;font-weight:500;white-space:nowrap;font-size:11px}
+  .hist-table td{padding:7px 12px;border-bottom:1px solid #f0f2f5;color:#4b5563;font-variant-numeric:tabular-nums}
   .hist-table tbody tr:hover td{background:#f8f9fb}
-  .table-wrap{overflow-x:auto;border-radius:12px;border:1px solid #f0f2f5}
+  .table-wrap{overflow-x:auto;border:1px solid #e4e6ea;border-radius:6px}
 
-  /* ======================== 日志框 ======================== */
-  .log-box{background:#f8f9fb;border:1px solid #f0f2f5;border-radius:10px;padding:14px;
-           font-family:'Consolas',monospace;font-size:12px;max-height:260px;overflow-y:auto;line-height:1.7;color:#555}
+  .log-box{background:#f8f9fb;border:1px solid #e4e6ea;border-radius:6px;padding:12px;
+           font-family:'Consolas','Courier New',monospace;font-size:11px;max-height:240px;overflow-y:auto;line-height:1.6;color:#6b7280}
 
-  /* ======================== 空状态 ======================== */
-  .empty{padding:48px 20px;text-align:center;color:#b0b6c4;font-size:14px}
-  .empty .empty-icon{font-size:40px;margin-bottom:8px;opacity:.4}
+  .empty{padding:40px 20px;text-align:center;color:#b0b6c4;font-size:12px}
 
-  /* ======================== 历史切换按钮 ======================== */
-  .hist-switch{display:flex;gap:6px;margin-bottom:16px}
-  .hist-switch .btn{background:#f0f2f5;color:#555}
+  .hist-switch{display:flex;gap:4px;margin-bottom:12px}
+  .hist-switch .btn{background:#f0f2f5;color:#6b7280}
   .hist-switch .btn.active{background:#2563eb;color:#fff}
 
-  /* ======================== 响应式 ======================== */
   @media(max-width:700px){
     .header{padding:0 16px}
-    .header h1{font-size:14px}
+    .header h1{font-size:13px}
     .header h1 small{display:none}
-    .tabs{padding:12px 16px 0}
-    .tab{padding:8px 14px;font-size:13px}
+    .tabs{padding:0 16px}
+    .tab{padding:10px 14px;font-size:12px}
     .content{padding:14px 16px 24px}
-    .stats{grid-template-columns:repeat(2,1fr);gap:10px}
+    .stats{grid-template-columns:repeat(2,1fr);gap:8px}
     .stat-card{padding:14px}
-    .stat-card .stat-icon{width:40px;height:40px;font-size:18px}
-    .stat-card .stat-info .num{font-size:22px}
+    .stat-card .num{font-size:22px}
     .grid{grid-template-columns:1fr}
-    .page-section{padding:16px;border-radius:10px}
+    .page-section{padding:14px}
   }
 </style>
 </head>
 <body>
 
-<!-- ======================== 顶栏 ======================== -->
 <div class="header">
-  <div class="logo">
-    <div class="logo-icon">🧠</div>
-    <h1>中央大脑 <small>· 多机器人调度系统</small></h1>
-  </div>
+  <h1>中央大脑 <small>· 多机器人调度系统</small></h1>
   <div class="status-badge">
     <span class="dot"></span>
     <span id="headerStatus">连接中...</span>
   </div>
 </div>
 
-<!-- ======================== 导航标签 ======================== -->
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('dashboard')" id="tab_dashboard"><span class="icon">📊</span>总览</div>
-  <div class="tab" onclick="switchTab('robots')" id="tab_robots"><span class="icon">🤖</span>机器人</div>
-  <div class="tab" onclick="switchTab('patrol')" id="tab_patrol"><span class="icon">🗺️</span>巡逻</div>
-  <div class="tab" onclick="switchTab('history')" id="tab_history"><span class="icon">📋</span>日志</div>
+  <div class="tab active" onclick="switchTab('dashboard')" id="tab_dashboard">总览</div>
+  <div class="tab" onclick="switchTab('robots')" id="tab_robots">机器人</div>
+  <div class="tab" onclick="switchTab('patrol')" id="tab_patrol">巡逻</div>
+  <div class="tab" onclick="switchTab('history')" id="tab_history">日志</div>
 </div>
 
-<!-- ======================== 总览页 ======================== -->
 <div class="content active" id="page_dashboard">
   <div class="stats" id="statsBar"></div>
-
   <div class="page-section">
-    <h3>⚠️ 告警消息</h3>
-    <div class="alert-list" id="alertFeed"><div class="empty"><div class="empty-icon">🔔</div>暂无告警</div></div>
+    <h3>告警消息</h3>
+    <div class="alert-list" id="alertFeed"><div class="empty">暂无告警</div></div>
   </div>
-
   <div class="page-section">
-    <h3>🤖 在线机器人</h3>
+    <h3>在线机器人</h3>
     <div class="grid" id="robotGrid"></div>
   </div>
 </div>
 
-<!-- ======================== 机器人页 ======================== -->
 <div class="content" id="page_robots">
   <div class="page-section">
-    <h3>🤖 全部机器人 <span class="badge" id="robotCountBadge">0</span></h3>
+    <h3>全部机器人 <span id="robotCountBadge" style="color:#9ca3af;margin-left:6px">· 0</span></h3>
     <div class="grid" id="robotGridFull"></div>
   </div>
 </div>
 
-<!-- ======================== 巡逻页 ======================== -->
 <div class="content" id="page_patrol">
   <div class="page-section">
-    <h3>▶️ 巡逻控制 <span id="patrolStatus" style="font-size:12px;color:#888;font-weight:400">(空闲)</span></h3>
+    <h3>巡逻控制 <span id="patrolStatus" style="font-weight:400;color:#9ca3af;margin-left:8px">(空闲)</span></h3>
     <div class="patrol-controls">
-      <button class="btn btn-success" onclick="patrolStart()">▶ 开始巡逻</button>
-      <button class="btn btn-danger" onclick="patrolStop()">■ 停止巡逻</button>
+      <button class="btn btn-success" onclick="patrolStart()">开始巡逻</button>
+      <button class="btn btn-danger" onclick="patrolStop()">停止巡逻</button>
     </div>
   </div>
-
   <div class="page-section">
-    <h3>📍 巡逻点管理</h3>
+    <h3>巡逻点管理</h3>
     <div class="patrol-controls">
-      <input id="ptName" placeholder="名称" style="width:100px">
-      <input id="ptX" placeholder="X坐标" type="number" step="0.1" style="width:90px">
-      <input id="ptY" placeholder="Y坐标" type="number" step="0.1" style="width:90px">
-      <input id="ptYaw" placeholder="朝向" type="number" step="0.1" value="0" style="width:80px">
-      <button class="btn btn-primary" onclick="patrolAdd()">＋ 添加</button>
+      <input id="ptName" placeholder="名称" style="width:90px">
+      <input id="ptX" placeholder="X坐标" type="number" step="0.1" style="width:70px">
+      <input id="ptY" placeholder="Y坐标" type="number" step="0.1" style="width:70px">
+      <input id="ptYaw" placeholder="朝向" type="number" step="0.1" value="0" style="width:70px">
+      <button class="btn btn-primary" onclick="patrolAdd()">添加</button>
     </div>
-    <div class="patrol-list" id="patrolList"><div class="empty"><div class="empty-icon">📍</div>还没有巡逻点，在上方添加</div></div>
+    <div class="patrol-list" id="patrolList"><div class="empty">暂无巡逻点</div></div>
   </div>
-
   <div class="page-section">
-    <h3>📄 巡逻日志</h3>
-    <div class="log-box" id="patrolLog"><div class="empty">暂无日志</div></div>
+    <h3>巡逻日志</h3>
+    <div class="log-box" id="patrolLog"><div class="empty">-</div></div>
   </div>
 </div>
 
-<!-- ======================== 日志页 ======================== -->
 <div class="content" id="page_history">
-  <div class="stats" id="histStatsBar"></div>
   <div class="page-section">
-    <h3>📋 系统日志</h3>
+    <h3>系统日志</h3>
     <div class="hist-switch">
-      <button class="btn active" id="histTabTasks" onclick="loadHistory('tasks')">📝 任务记录</button>
-      <button class="btn" id="histTabRobots" onclick="loadHistory('robots')">📈 状态历史</button>
+      <button class="btn active" id="histTabTasks" onclick="loadHistory('tasks')">任务记录</button>
+      <button class="btn" id="histTabRobots" onclick="loadHistory('robots')">状态历史</button>
     </div>
     <div class="table-wrap">
       <table class="hist-table" id="histTable">
@@ -248,7 +196,6 @@
 </div>
 
 <script>
-// ======================== 工具函数 ========================
 const API = '/api/v1';
 function $(id){return document.getElementById(id)}
 async function api(path, opts){
@@ -256,187 +203,169 @@ async function api(path, opts){
   return r.json();
 }
 
-// ======================== Tab 切换 ========================
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.content').forEach(c=>c.classList.remove('active'));
-  $('tab_' + name).classList.add('active');
-  $('page_' + name).classList.add('active');
-  if(name === 'robots') loadRobots();
-  if(name === 'patrol') loadPatrol();
-  if(name === 'history') loadHistory('tasks');
+  $('tab_'+name).classList.add('active');
+  $('page_'+name).classList.add('active');
+  if(name==='robots') loadRobots();
+  if(name==='patrol') loadPatrol();
+  if(name==='history') loadHistory('tasks');
 }
 
-// ======================== SSE 实时事件 ========================
 const evtSource = new EventSource(API + '/events');
-const _已见告警 = new Set();
+const _seen = new Set();
 
 evtSource.onmessage = function(e){
   try {
     const ev = JSON.parse(e.data);
-    if(ev.type === 'alert') addAlert(ev.data);
-    if(ev.type === 'system_health') updateStats(ev.data);
+    if(ev.type==='alert') addAlert(ev.data);
+    if(ev.type==='system_health') updateStats(ev.data);
   } catch(ex) {}
 };
 
-// ======================== 告警（去重） ========================
-function addAlert(alert){
-  const key = (alert.level||'') + '|' + (alert.message||alert.type||'');
-  if(_已见告警.has(key)) return;
-  _已见告警.add(key);
-  const feed = $('alertFeed');
-  const empty = feed.querySelector('.empty');
-  if(empty) feed.innerHTML = '';
-  const iconMap = {error:'❌',warning:'⚠️',info:'ℹ️'};
-  const el = document.createElement('div');
-  el.className = 'alert-item alert-' + (alert.level||'info');
-  const t = new Date((alert.time||0)*1000);
-  el.innerHTML = '<span class="alert-icon">'+(iconMap[alert.level]||'ℹ️')+'</span>' +
-    '<span class="time">'+t.toLocaleTimeString()+'</span><span>'+ (alert.message||alert.type)+'</span>';
+function addAlert(a){
+  const key=(a.level||'')+'|'+(a.message||a.type||'');
+  if(_seen.has(key)) return;
+  _seen.add(key);
+  const feed=$('alertFeed');
+  const empty=feed.querySelector('.empty');
+  if(empty) feed.innerHTML='';
+  const levelLabel={error:'错误',warning:'警告',info:'信息'};
+  const el=document.createElement('div');
+  el.className='alert-item alert-'+(a.level||'info');
+  const t=new Date((a.time||0)*1000);
+  el.innerHTML='<span class="level-tag">'+(levelLabel[a.level]||'信息')+'</span><span class="time">'+t.toLocaleTimeString()+'</span><span>'+(a.message||a.type||'')+'</span>';
   feed.appendChild(el);
 }
 
-// ======================== 统计卡片 ========================
+function formatUptime(s){
+  if(s>86400) return Math.floor(s/86400)+'天 '+Math.floor((s%86400)/3600)+'小时';
+  if(s>3600) return Math.floor(s/3600)+'小时 '+Math.floor((s%3600)/60)+'分';
+  return Math.floor(s/60)+'分钟';
+}
+
 function updateStats(data){
   $('headerStatus').textContent = data.robot_count+' 台设备 · '+data.online+' 在线';
-  const uptimeStr = data.uptime > 3600 ? Math.floor(data.uptime/3600)+'h '+Math.floor((data.uptime%3600)/60)+'m' : Math.floor(data.uptime/60)+' 分钟';
-  $('statsBar').innerHTML = [
-    '<div class="stat-card"><div class="stat-icon blue">🤖</div><div class="stat-info"><div class="num">'+data.robot_count+'</div><div class="lbl">机器人总数</div></div></div>',
-    '<div class="stat-card"><div class="stat-icon green">🟢</div><div class="stat-info"><div class="num">'+data.online+'</div><div class="lbl">在线</div></div></div>',
-    '<div class="stat-card"><div class="stat-icon orange">⭕</div><div class="stat-info"><div class="num">'+(data.robot_count-data.online)+'</div><div class="lbl">离线</div></div></div>',
-    '<div class="stat-card"><div class="stat-icon purple">⏱️</div><div class="stat-info"><div class="num">'+uptimeStr+'</div><div class="lbl">运行时长</div></div></div>',
-  ].join('');
+  $('statsBar').innerHTML =
+    '<div class="stat-card"><div class="num">'+data.robot_count+'</div><div class="lbl">设备总数</div></div>'+
+    '<div class="stat-card"><div class="num">'+data.online+'</div><div class="lbl">在线</div></div>'+
+    '<div class="stat-card"><div class="num">'+(data.robot_count-data.online)+'</div><div class="lbl">离线</div></div>'+
+    '<div class="stat-card"><div class="num">'+formatUptime(data.uptime)+'</div><div class="lbl">运行时长</div></div>';
 }
 
-// ======================== 仪表盘加载 ========================
 async function loadDashboard(){
   try {
-    const data = await api('/status');
-    const totals = data.data || {};
-    $('headerStatus').textContent = (totals.total||0)+' 台设备 · '+(totals.online||0)+' 在线';
-    $('statsBar').innerHTML = [
-      '<div class="stat-card"><div class="stat-icon blue">🤖</div><div class="stat-info"><div class="num">'+(totals.total||0)+'</div><div class="lbl">机器人总数</div></div></div>',
-      '<div class="stat-card"><div class="stat-icon green">🟢</div><div class="stat-info"><div class="num">'+(totals.online||0)+'</div><div class="lbl">在线</div></div></div>',
-      '<div class="stat-card"><div class="stat-icon orange">⭕</div><div class="stat-info"><div class="num">'+((totals.total||0)-(totals.online||0))+'</div><div class="lbl">离线</div></div></div>',
-    ].join('');
-    renderRobotCards((data.data?.robots)||[]);
-  } catch(e) { $('headerStatus').textContent = '无法连接中央大脑'; }
+    const data=await api('/status');
+    const t=data.data||{};
+    $('headerStatus').textContent=(t.total||0)+' 台设备 · '+(t.online||0)+' 在线';
+    $('statsBar').innerHTML =
+      '<div class="stat-card"><div class="num">'+(t.total||0)+'</div><div class="lbl">设备总数</div></div>'+
+      '<div class="stat-card"><div class="num">'+(t.online||0)+'</div><div class="lbl">在线</div></div>'+
+      '<div class="stat-card"><div class="num">'+((t.total||0)-(t.online||0))+'</div><div class="lbl">离线</div></div>';
+    renderCards((data.data?.robots)||[]);
+  } catch(e){$('headerStatus').textContent='无法连接';}
 }
 
-function renderRobotCards(robots){
-  const root = $('robotGrid');
-  if(!robots.length){ root.innerHTML = '<div class="empty"><div class="empty-icon">🤖</div>暂无机器人注册</div>'; return; }
-  root.innerHTML = robots.map(rcard).join('');
+function renderCards(robots){
+  const root=$('robotGrid');
+  if(!robots.length){root.innerHTML='<div class="empty">暂无注册机器人</div>';return;}
+  root.innerHTML=robots.map(rcard).join('');
 }
 
 function rcard(r){
-  const tag = r.type==='dog'?'<span class="tag tag-dog">🐕 机器狗</span>':
-              r.type==='drone'?'<span class="tag tag-drone">🛸 无人机</span>':'';
-  const batPct = Math.round((r.battery||0)*100);
-  const batCol = batPct>50?'#16a34a':batPct>20?'#ea580c':'#dc2626';
-  const hlClass = (r.health||'ok')==='ok'?'status-ok':(r.health||'')==='warning'?'status-warning':'status-error';
+  const tag=r.type==='dog'?'<span class="tag tag-dog">机器狗</span>':r.type==='drone'?'<span class="tag tag-drone">无人机</span>':'';
+  const pct=Math.round((r.battery||0)*100);
+  const bc=pct>50?'#15803d':pct>20?'#d97706':'#dc2626';
+  const hc=(r.health||'ok')==='ok'?'status-ok':(r.health||'')==='warning'?'status-warning':'status-error';
+  const healthText={ok:'正常',warning:'异常',error:'故障'};
   return '<div class="card"><div class="card-header"><h3>'+(r.id||'?')+' '+tag+'</h3></div>'+
     '<div class="card-body">'+
-    '<div class="row"><span class="label">状态</span><span class="'+hlClass+'">'+(r.health||'?')+'</span></div>'+
+    '<div class="row"><span class="label">状态</span><span class="'+hc+'">'+(healthText[r.health]||r.health||'?')+'</span></div>'+
     '<div class="row"><span class="label">模式</span><span>'+(r.mode||'?')+'</span></div>'+
-    '<div class="row"><span class="label">电量</span><span>'+batPct+'% <span class="bat-bar"><span class="bat-fill" style="width:'+batPct+'%;background:'+batCol+'"></span></span></span></div>'+
-    '<div class="row"><span class="label">通信</span><span>'+(r.comm_level?'L'+r.comm_level:'?')+'</span></div>'+
+    '<div class="row"><span class="label">电量</span><span>'+pct+'% <span class="bat-bar"><span class="bat-fill" style="width:'+pct+'%;background:'+bc+'"></span></span></span></div>'+
+    '<div class="row"><span class="label">通信</span><span>L'+(r.comm_level||'?')+'</span></div>'+
     '</div><div class="card-footer">'+
-    '<button class="btn btn-default btn-sm" onclick="sendCmd(\''+r.id+'\',\'stand\')">🦴 起立</button>'+
-    '<button class="btn btn-default btn-sm" onclick="sendCmd(\''+r.id+'\',\'patrol\')">▶ 巡逻</button>'+
-    '<button class="btn btn-default btn-sm" onclick="sendCmd(\''+r.id+'\',\'stop\')">⏹ 停止</button>'+
-    '<button class="btn btn-danger btn-sm" onclick="sendCmd(\''+r.id+'\',\'alert\')">⛔ 急停</button>'+
+    '<button class="btn btn-default btn-sm" onclick="sendCmd(\''+r.id+'\',\'stand\')">起立</button>'+
+    '<button class="btn btn-default btn-sm" onclick="sendCmd(\''+r.id+'\',\'patrol\')">巡逻</button>'+
+    '<button class="btn btn-default btn-sm" onclick="sendCmd(\''+r.id+'\',\'stop\')">停止</button>'+
+    '<button class="btn btn-danger btn-sm" onclick="sendCmd(\''+r.id+'\',\'alert\')">急停</button>'+
     '</div></div>';
 }
 
-// ======================== 指令 ========================
-async function sendCmd(robotId, cmd){
-  const res = await api('/command', {method:'POST',body:JSON.stringify({robot_id:robotId,command:cmd})});
-  addAlert({level:'info',message:'指令 '+cmd+' → '+robotId, time:Date.now()/1000});
+async function sendCmd(id,cmd){
+  await api('/command',{method:'POST',body:JSON.stringify({robot_id:id,command:cmd})});
+  addAlert({level:'info',message:cmd+' -> '+id,time:Date.now()/1000});
   loadDashboard();
 }
 
-// ======================== 机器人详情页 ========================
 async function loadRobots(){
-  const root = $('robotGridFull');
-  const data = await api('/robots');
-  const robots = data.data||[];
-  $('robotCountBadge').textContent = robots.length;
-  if(!robots.length){ root.innerHTML='<div class="empty"><div class="empty-icon">🤖</div>暂无注册机器人</div>'; return; }
-  const fullCards = [];
+  const root=$('robotGridFull');
+  const data=await api('/robots');
+  const robots=data.data||[];
+  $('robotCountBadge').textContent='· '+robots.length;
+  if(!robots.length){root.innerHTML='<div class="empty">暂无注册机器人</div>';return;}
+  const full=[];
   for(const r of robots){
     try {
-      const rd = await api('/robots/'+r.id);
-      const st = rd.data?.status||{};
-      fullCards.push({
-        id:r.id, type:st.robot_type||(r.id.includes('狗')?'dog':'drone'),
-        battery:st.battery, mode:st.mode, health:st.health,
-        comm_level:st.communication_level, position:st.position,
-        capabilities:rd.data?.capabilities||[],
-      });
-    } catch(e) { fullCards.push({id:r.id,type:'dog'}); }
+      const rd=await api('/robots/'+r.id);
+      const st=rd.data?.status||{};
+      full.push({id:r.id,type:st.robot_type||'dog',battery:st.battery,mode:st.mode,health:st.health,comm_level:st.communication_level,position:st.position,capabilities:rd.data?.capabilities||[]});
+    }catch(e){full.push({id:r.id,type:'dog'});}
   }
-  root.innerHTML = fullCards.map(r=>{
-    const html = rcard(r);
-    const pos = r.position?'('+(r.position[0]?.toFixed(1)||'?')+', '+(r.position[1]?.toFixed(1)||'?')+')':'未知';
-    const caps = (r.capabilities||[]).join('、');
+  root.innerHTML=full.map(r=>{
+    const html=rcard(r);
+    const pos=r.position?'('+(r.position[0]?.toFixed(1)||'?')+', '+(r.position[1]?.toFixed(1)||'?')+')':'未知';
+    const caps=(r.capabilities||[]).join(', ');
     return html.replace('</div></div>',
-      '<div class="row"><span class="label">坐标</span><span>'+pos+'</span></div>'+
-      (caps?'<div class="row"><span class="label">能力</span><span>'+caps+'</span></div>':'')+
+      '<div class="row"><span class="label">坐标</span><span>'+pos+'</span></div>'+(caps?'<div class="row"><span class="label">能力</span><span>'+caps+'</span></div>':'')+
       '</div></div>');
   }).join('');
 }
 
-// ======================== 巡逻 ========================
 async function loadPatrol(){
-  const res = await api('/patrol/status');
-  const st = res.data||{};
-  $('patrolStatus').textContent = st.patrol_running?'(▶ 运行中)':'(■ 空闲)';
-  const pts = await api('/patrol/points');
-  const list = pts.data||[];
-  const c = $('patrolList');
-  if(!list.length){ c.innerHTML='<div class="empty"><div class="empty-icon">📍</div>还没有巡逻点，在上方添加</div>'; return; }
-  c.innerHTML = list.map((p,i)=>
-    '<div class="patrol-item"><span><span class="pt-name">'+(p.name||'点'+(i+1))+'</span>' +
-    '('+p.x+', '+p.y+') 朝向='+p.yaw+'</span>' +
-    '<button class="btn btn-danger btn-sm" onclick="patrolDel('+i+')">✕</button></div>'
+  const res=await api('/patrol/status');
+  const st=res.data||{};
+  $('patrolStatus').textContent=st.patrol_running?'(运行中)':'(空闲)';
+  const pts=await api('/patrol/points');
+  const list=pts.data||[];
+  const c=$('patrolList');
+  if(!list.length){c.innerHTML='<div class="empty">暂无巡逻点</div>';return;}
+  c.innerHTML=list.map((p,i)=>
+    '<div class="patrol-item"><span><span class="pt-name">'+(p.name||'点'+(i+1))+'</span> ('+p.x+', '+p.y+') 朝向='+p.yaw+'</span>'+
+    '<button class="btn btn-danger btn-sm" onclick="patrolDel('+i+')">删除</button></div>'
   ).join('');
 }
 async function patrolAdd(){
-  const name=$('ptName').value, x=parseFloat($('ptX').value), y=parseFloat($('ptY').value), yaw=parseFloat($('ptYaw').value)||0;
-  if(isNaN(x)||isNaN(y)) return alert('请填写坐标');
-  await api('/patrol/points',{method:'POST',body:JSON.stringify({x,y,yaw,name})});
+  const n=$('ptName').value,x=parseFloat($('ptX').value),y=parseFloat($('ptY').value),yaw=parseFloat($('ptYaw').value)||0;
+  if(isNaN(x)||isNaN(y)) return;
+  await api('/patrol/points',{method:'POST',body:JSON.stringify({x,y,yaw,name:n})});
   $('ptName').value='';$('ptX').value='';$('ptY').value='';
   loadPatrol();
 }
-async function patrolDel(index){ await api('/patrol/points/'+index,{method:'DELETE'}); loadPatrol(); }
-async function patrolStart(){ await api('/patrol/start',{method:'POST'}); loadPatrol(); addAlert({level:'info',message:'巡逻已启动',time:Date.now()/1000}); }
-async function patrolStop(){ await api('/patrol/stop',{method:'POST'}); loadPatrol(); addAlert({level:'info',message:'巡逻已停止',time:Date.now()/1000}); }
+async function patrolDel(i){await api('/patrol/points/'+i,{method:'DELETE'});loadPatrol();}
+async function patrolStart(){await api('/patrol/start',{method:'POST'});loadPatrol();addAlert({level:'info',message:'巡逻已启动',time:Date.now()/1000});}
+async function patrolStop(){await api('/patrol/stop',{method:'POST'});loadPatrol();addAlert({level:'info',message:'巡逻已停止',time:Date.now()/1000});}
 
-// ======================== 历史 ========================
 async function loadHistory(type){
   $('histTabTasks').className='btn'+(type==='tasks'?' active':'');
   $('histTabRobots').className='btn'+(type==='robots'?' active':'');
-  const tbody = $('histBody');
+  const tbody=$('histBody');
   try {
-    const data = type==='tasks'?await api('/history/tasks?limit=100'):await api('/history/robots?limit=100');
-    const rows = data.data||[];
+    const data=type==='tasks'?await api('/history/tasks?limit=100'):await api('/history/robots?limit=100');
+    const rows=data.data||[];
     if(type==='tasks'){
       $('histTable').querySelector('thead tr').innerHTML='<th>时间</th><th>机器人</th><th>类型</th><th>来源</th><th>结果</th>';
-      tbody.innerHTML = rows.map(r=>'<tr><td>'+new Date((r.created_at||0)*1000).toLocaleString()+'</td><td>'+(r.robot_id||'')+'</td><td>'+(r.type||'')+'</td><td>'+(r.source||'')+'</td><td>'+(r.success?'✅':'❌')+' '+(r.message||'')+'</td></tr>').join('')||'<tr><td colspan="5"><div class="empty">暂无记录</div></td></tr>';
-    } else {
+      tbody.innerHTML=rows.map(r=>'<tr><td>'+new Date((r.created_at||0)*1000).toLocaleString()+'</td><td>'+(r.robot_id||'')+'</td><td>'+(r.type||'')+'</td><td>'+(r.source||'')+'</td><td>'+(r.success?'成功':'失败')+' '+(r.message||'')+'</td></tr>').join('')||'<tr><td colspan="5"><div class="empty">-</div></td></tr>';
+    }else{
       $('histTable').querySelector('thead tr').innerHTML='<th>时间</th><th>机器人</th><th>类型</th><th>电量</th><th>模式</th><th>健康</th>';
-      tbody.innerHTML = rows.map(r=>'<tr><td>'+new Date((r.timestamp||0)*1000).toLocaleString()+'</td><td>'+(r.robot_id||'')+'</td><td>'+(r.robot_type||'')+'</td><td>'+Math.round((r.battery||0)*100)+'%</td><td>'+(r.mode||'')+'</td><td>'+(r.health||'')+'</td></tr>').join('')||'<tr><td colspan="6"><div class="empty">暂无记录</div></td></tr>';
+      tbody.innerHTML=rows.map(r=>'<tr><td>'+new Date((r.timestamp||0)*1000).toLocaleString()+'</td><td>'+(r.robot_id||'')+'</td><td>'+(r.robot_type||'')+'</td><td>'+Math.round((r.battery||0)*100)+'%</td><td>'+(r.mode||'')+'</td><td>'+(r.health||'')+'</td></tr>').join('')||'<tr><td colspan="6"><div class="empty">-</div></td></tr>';
     }
-  } catch(e) { tbody.innerHTML='<tr><td colspan="5"><div class="empty">加载失败</div></td></tr>'; }
+  }catch(e){tbody.innerHTML='<tr><td colspan="5"><div class="empty">加载失败</div></td></tr>';}
 }
 
-// ======================== 启动 ========================
 loadDashboard();
-setInterval(()=>{
-  const a=document.querySelector('.content.active');
-  if(a&&a.id==='page_dashboard') loadDashboard();
-},3000);
+setInterval(()=>{const a=document.querySelector('.content.active');if(a&&a.id==='page_dashboard')loadDashboard();},3000);
 </script>
 </body>
 </html>
