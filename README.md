@@ -9,46 +9,51 @@ E:\zy\
 ├── 主控.py                  # 入口 shim（自动跳转到 src/）
 │
 ├── src/                     # 核心源码
-│   ├── main.py              # 主入口
+│   ├── main.py              # 主入口 + 巡逻控制器
 │   ├── 配置.yaml            # 唯一配置源
 │   ├── requirements.txt     # Python 依赖
 │   ├── 巡逻点.yaml           # 巡逻点位配置
+│   │
+│   ├── 配置/                 # 配置加载模块
+│   │   ├── __init__.py
+│   │   └── 配置加载.py        # 从 main.py 提取
 │   │
 │   ├── 检测/                 # 火情检测模块
 │   │   └── 火情检测.py
 │   │
 │   ├── 机器人/               # 机器狗控制
-│   │   ├── robot_base.py     # 机器人抽象基类
+│   │   ├── robot_base.py     # 机器人抽象基类 + 数据类型(RobotOrder/Status/Result)
 │   │   ├── 机器狗控制.py      # 绝影Lite3 UDP 控制
 │   │   ├── 机器狗_绝影.py     # RobotBase 适配实现
-│   │   ├── 感知主机控制.py    # 感知主机控制
+│   │   ├── 感知主机控制.py    # 感知主机 SSH 控制
 │   │   └── 机器人模拟器.py    # 模拟器
 │   │
 │   ├── 中央大脑/              # 多机器人调度系统
 │   │   ├── main.py           # 中央大脑入口
+│   │   ├── 巡逻数据类型.py    # 巡逻点/巡逻状态 数据类型
 │   │   ├── brain_registry.py # 机器人注册中心
 │   │   ├── brain_comm.py     # 通信管理器
-│   │   ├── brain_llm.py      # LLM 后端
-│   │   ├── brain_web.py      # Web 面板
-│   │   ├── brain_scheduler.py# 调度器
-│   │   ├── brain_ops_agent.py# 运维代理
-│   │   └── 自主巡逻.py        # 自主巡逻
+│   │   ├── brain_llm.py      # LLM 调度引擎
+│   │   ├── brain_scheduler.py# 任务规划器
+│   │   ├── brain_ops_agent.py# 运维Agent
+│   │   ├── brain_web.py      # Web 面板 API（已修复完整）
+│   │   └── 自主巡逻.py        # 自主巡逻调度器
 │   │
 │   ├── 面板/                 # 可视化面板
+│   │   ├── web服务器.py       # Flask Web 服务器（从 main.py 提取）
 │   │   ├── web_dashboard.html# Web 控制面板
 │   │   └── 桌面端.py          # Tkinter 桌面控制端
 │   │
-│   ├── 通信桥/               # AI 通信桥（Hermes / Claude）
-│   │   ├── ai_bridge_server.py
-│   │   ├── ai_bridge_simple.py
-│   │   ├── claude_bridge_client.py
-│   │   ├── claude_client.js
-│   │   ├── hermes_bridge.py
-│   │   ├── hermes_bridge_monitor.py
-│   │   ├── hermes_桥接.py
-│   │   ├── AI_BRIDGE_README.md
-│   │   └── ai_comm/          # 通信消息队列
+│   ├── 脚本/                 # 训练/工具脚本
+│   │   ├── train.py          # 火情检测模型训练
+│   │   ├── train_merged.py   # 合并数据集训练
+│   │   ├── keyboard_control.py# 键盘遥控机器狗
+│   │   └── ...
 │   │
+│   ├── models/               # YOLO 模型文件
+│   ├── runs/                 # 训练结果
+│   └── data/                 # 运行时数据
+│
 │   ├── 脚本/                 # 训练/工具脚本
 │   │   ├── train.py          # 火情检测模型训练
 │   │   ├── train_merged.py   # 合并数据集训练

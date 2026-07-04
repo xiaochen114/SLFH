@@ -5,6 +5,7 @@ __pycache__/
 # 敏感
 data/api_keys.json
 data/chat_history.json
+APK.txt
 
 # 大文件
 models/

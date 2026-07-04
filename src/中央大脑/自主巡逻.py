@@ -2,61 +2,35 @@
 """
 自主巡逻调度器 — 管理巡逻点队列，循环下发导航目标
 依赖: 机器人/感知主机控制.py → Nav2
-
-用法:
-  p = 自主巡逻(感知主机)
-  p.加载配置("巡逻点.yaml")
-  p.添加点(x, y, yaw)
-  p.开始巡逻()
 """
 import os, sys, time, threading, yaml
-from dataclasses import dataclass, field
-from typing import List, Optional
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
-@dataclass
-class 巡逻点:
-    x: float
-    y: float
-    yaw: float = 0.0
-    name: str = ""
-
-
-@dataclass
-class 巡逻状态:
-    运行中: bool = False
-    当前点索引: int = -1
-    当前点: Optional[巡逻点] = None
-    状态: str = "idle"     # idle/导航中/停留/跳过/完成
-    总点数: int = 0
-    日志: list = field(default_factory=list)
+from 中央大脑.巡逻数据类型 import 巡逻点, 巡逻状态
 
 
 class 自主巡逻:
-    """巡逻调度器"""
+    """巡逻调度器 — 点管理、循环调度、超时/障碍处理"""
 
     def __init__(self, 感知主机):
         self._ph = 感知主机
-        self._points: List[巡逻点] = []
+        self._points: list[巡逻点] = []
         self._stop = False
         self._thread = None
         self.状态 = 巡逻状态()
 
-        # 配置
-        self.停留时间 = 5       # 每点停留秒数
-        self.导航超时 = 120     # 导航超时秒数
-        self.遇障策略 = "skip"  # skip/retry
-        self.循环模式 = "loop"  # loop/once
+        # 可调参数
+        self.停留时间 = 5
+        self.导航超时 = 120
+        self.遇障策略 = "skip"   # skip / retry
+        self.循环模式 = "loop"   # loop / once
 
-    # ========== 加载配置 ==========
+    # ========== 配置读写 ==========
 
     def 加载配置(self, path="巡逻点.yaml"):
         if not os.path.exists(path):
             print(f"[巡逻] 配置文件不存在: {path}")
             return
-
         with open(path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
 
@@ -73,8 +47,6 @@ class 自主巡逻:
             ]
             self.状态.总点数 = len(self._points)
             self._log(f"加载 {len(self._points)} 个巡逻点")
-        else:
-            self._log("巡逻点为空，请用Web面板添加或修改配置文件")
 
     def 保存配置(self, path="巡逻点.yaml"):
         cfg = {
@@ -95,10 +67,9 @@ class 自主巡逻:
 
     def 添加点(self, x, y, yaw=0.0, name=""):
         idx = len(self._points) + 1
-        nm = name or f"点{idx}"
-        self._points.append(巡逻点(x=x, y=y, yaw=yaw, name=nm))
+        self._points.append(巡逻点(x=x, y=y, yaw=yaw, name=name or f"点{idx}"))
         self.状态.总点数 = len(self._points)
-        self._log(f"添加 {nm} ({x:.1f}, {y:.1f})")
+        self._log(f"添加 {self._points[-1].name}")
 
     def 删除点(self, index):
         if 0 <= index < len(self._points):
@@ -120,11 +91,9 @@ class 自主巡逻:
         if not self._points:
             self._log("无巡逻点，请先添加")
             return False
-
         if not self._ph.connected:
             self._log("感知主机未连接")
             return False
-
         if not self._ph.is_nav_running():
             self._log("导航未启动，正在启动...")
             if not self._ph.start_navigation():
@@ -154,13 +123,11 @@ class 自主巡逻:
                     self.状态.状态 = "完成"
                     self.状态.运行中 = False
                     return
-                idx = 0  # loop 模式：从头开始
+                idx = 0
 
             point = self._points[idx]
             self.状态.当前点索引 = idx
             self.状态.当前点 = point
-
-            # 下发导航目标
             self._log(f"→ {point.name} ({point.x:.1f}, {point.y:.1f})")
             self.状态.状态 = "导航中"
 
@@ -169,7 +136,6 @@ class 自主巡逻:
                 idx += 1
                 continue
 
-            # 等待到达或超时
             start = time.time()
             arrived = False
             while not self._stop and time.time() - start < self.导航超时:
@@ -186,20 +152,15 @@ class 自主巡逻:
             if arrived:
                 self._log(f"  {point.name} 到达，停留{self.停留时间}s")
                 self.状态.状态 = "停留"
-                # 停留观察（火情检测继续跑）
                 for _ in range(self.停留时间):
                     if self._stop:
                         return
                     time.sleep(1)
-
             elif not self._stop:
-                # 超时
-                if time.time() - start >= self.导航超时:
-                    self._log(f"  {point.name} 超时 {self.导航超时}s，跳过")
-
+                self._log(f"  {point.name} 超时 {self.导航超时}s，跳过")
             idx += 1
 
-    # ========== 日志 ==========
+    # ========== 日志与状态 ==========
 
     def _log(self, msg):
         t = time.strftime("%H:%M:%S")
@@ -209,9 +170,7 @@ class 自主巡逻:
             self.状态.日志.pop(0)
         print(entry)
 
-    # ========== 状态 ==========
-
-    def 获取状态(self) -> dict:
+    def 获取状态(self):
         nav = self._ph.get_status()
         return {
             "巡逻运行中": self.状态.运行中,
@@ -220,10 +179,6 @@ class 自主巡逻:
             "当前点坐标": (self.状态.当前点.x, self.状态.当前点.y) if self.状态.当前点 else None,
             "当前索引": self.状态.当前点索引 + 1,
             "总点数": self.状态.总点数,
-            "停留时间": self.停留时间,
-            "导航超时": self.导航超时,
-            "遇障策略": self.遇障策略,
-            "循环模式": self.循环模式,
             "导航运行中": nav.running,
             "导航状态": nav.state,
             "日志": self.状态.日志[-20:],
