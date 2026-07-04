@@ -10,6 +10,7 @@ from 中央大脑.brain_llm import LLM调度引擎
 from 中央大脑.brain_scheduler import 任务规划器
 from 中央大脑.brain_ops_agent import 运维Agent
 from 中央大脑.事件总线 import 事件总线
+from 中央大脑.数据库 import 数据库
 from 中央大脑.自主巡逻 import 自主巡逻
 from 机器人.感知主机控制 import 感知主机控制
 
@@ -24,6 +25,7 @@ class 中央大脑:
         self.llm = LLM调度引擎()
         self.scheduler = 任务规划器()
         self.ops_agent = 运维Agent(self.registry)
+        self.db = 数据库()
         self._running = False
 
         # 自主巡逻
@@ -35,7 +37,7 @@ class 中央大脑:
             self.patrol.加载配置()
 
         self.web = Web面板(
-            self.registry, self.comm, self.事件总线,
+            self.registry, self.comm, self.db, self.事件总线,
             web_host, web_port, patrol=self.patrol,
         )
 
@@ -76,12 +78,23 @@ class 中央大脑:
                 time.sleep(2)
                 tick += 1
 
-                # 心跳 & 事件发布
+                # 心跳 & 数据库记录
                 for r in self.registry.获取所有机器人():
                     if r.is_connected():
                         self.registry.心跳(r.robot_id)
                         try:
                             st = r.get_status()
+                            # 持久化状态快照（每 30s）
+                            if tick % 15 == 0:
+                                self.db.保存状态快照(
+                                    robot_id=r.robot_id,
+                                    robot_type=st.robot_type,
+                                    battery=st.battery,
+                                    mode=st.mode,
+                                    health=st.health,
+                                    comm_level=st.communication_level,
+                                    pos=st.position,
+                                )
                             self.事件总线.发布("robot_heartbeat", {
                                 "robot_id": r.robot_id,
                                 "battery": st.battery,
@@ -102,7 +115,18 @@ class 中央大脑:
                     for o in self.scheduler.规划(orders):
                         for r in self.registry.获取所有机器人():
                             if r.is_connected():
-                                self.comm.发送指令(r.robot_id, o)
+                                ok = self.comm.发送指令(r.robot_id, o)
+                                # 持久化任务日志
+                                self.db.记录任务(
+                                    order_id=o.order_id,
+                                    robot_id=r.robot_id,
+                                    type=o.type,
+                                    params=o.params,
+                                    priority=o.priority,
+                                    source=o.source,
+                                    success=ok,
+                                    message=f"指令 {o.type} {'成功' if ok else '失败'}",
+                                )
                                 self.事件总线.发布("brain_order", {
                                     "robot_id": r.robot_id,
                                     "type": o.type,
@@ -110,13 +134,14 @@ class 中央大脑:
                                 })
                                 break
 
-                # 健康状态广播（每 30s）
+                # 健康广播 & 清理旧数据（每 30s）
                 if tick % 15 == 0:
                     self.事件总线.发布("system_health", {
                         "robot_count": self.registry.获取数量(),
                         "online": len(self.registry.获取在线列表()),
                         "uptime": tick * 2,
                     })
+                    self.db.清理旧历史(keep_hours=72)
 
         except KeyboardInterrupt:
             print("\n[中央大脑] 用户停止")

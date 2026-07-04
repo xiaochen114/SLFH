@@ -43,9 +43,10 @@ def require_json(keys=()):
 class Web面板:
     """中央大脑 HTTP API v1 + SSE 实时推送"""
 
-    def __init__(self, registry, comm, event_bus=None, host="0.0.0.0", port=5000, patrol=None):
+    def __init__(self, registry, comm, db=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None):
         self._registry = registry
         self._comm = comm
+        self._db = db
         self._event_bus = event_bus or 事件总线()
         self._host = host
         self._port = port
@@ -81,6 +82,12 @@ class Web面板:
 
         # API v1 - 健康检查
         a.add_url_rule("/api/v1/health", "api_health", self._api_health)
+
+        # API v1 - 历史数据
+        a.add_url_rule("/api/v1/history/robots", "hist_robots", self._hist_robots)
+        a.add_url_rule("/api/v1/history/tasks", "hist_tasks", self._hist_tasks)
+        a.add_url_rule("/api/v1/history/patrol", "hist_patrol", self._hist_patrol)
+        a.add_url_rule("/api/v1/history/stats", "hist_stats", self._hist_stats)
 
         # API v1 - 巡逻
         a.add_url_rule("/api/v1/patrol/points", "patrol_points", self._patrol_points)
@@ -208,6 +215,33 @@ class Web面板:
                 "X-Accel-Buffering": "no",
             },
         )
+
+    # ======================== API v1: 历史数据 ========================
+
+    def _hist_robots(self):
+        if not self._db:
+            return fail(400, "数据库未启用")
+        robot_id = request.args.get("robot_id")
+        limit = int(request.args.get("limit", 100))
+        return ok(self._db.查询状态历史(robot_id, limit))
+
+    def _hist_tasks(self):
+        if not self._db:
+            return fail(400, "数据库未启用")
+        robot_id = request.args.get("robot_id")
+        limit = int(request.args.get("limit", 100))
+        return ok(self._db.查询任务日志(robot_id, limit))
+
+    def _hist_patrol(self):
+        if not self._db:
+            return fail(400, "数据库未启用")
+        limit = int(request.args.get("limit", 100))
+        return ok(self._db.查询巡逻日志(limit))
+
+    def _hist_stats(self):
+        if not self._db:
+            return fail(400, "数据库未启用")
+        return ok(self._db.获取统计())
 
     # ======================== API v1: 巡逻 ========================
 
