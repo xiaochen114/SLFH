@@ -166,7 +166,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     brain = 中央大脑(web_port=args.port, 启用巡逻=args.patrol)
-    from 机器人.机器人模拟器 import 模拟机器人
-    brain.注册机器人(模拟机器人("模拟狗1"))
-    brain.注册机器人(模拟机器人("模拟无人机1", robot_type="drone"))
     brain.启动()
