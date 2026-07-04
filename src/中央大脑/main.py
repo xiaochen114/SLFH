@@ -11,6 +11,7 @@ from 中央大脑.brain_scheduler import 任务规划器
 from 中央大脑.brain_ops_agent import 运维Agent
 from 中央大脑.事件总线 import 事件总线
 from 中央大脑.数据库 import 数据库
+from 中央大脑.监控告警 import 监控告警
 from 中央大脑.自主巡逻 import 自主巡逻
 from 机器人.感知主机控制 import 感知主机控制
 
@@ -26,6 +27,7 @@ class 中央大脑:
         self.scheduler = 任务规划器()
         self.ops_agent = 运维Agent(self.registry)
         self.db = 数据库()
+        self.告警 = 监控告警(self.事件总线, self.db)
         self._running = False
 
         # 自主巡逻
@@ -37,7 +39,7 @@ class 中央大脑:
             self.patrol.加载配置()
 
         self.web = Web面板(
-            self.registry, self.comm, self.db, self.事件总线,
+            self.registry, self.comm, self.db, self.告警, self.事件总线,
             web_host, web_port, patrol=self.patrol,
         )
 

@@ -43,10 +43,11 @@ def require_json(keys=()):
 class Web面板:
     """中央大脑 HTTP API v1 + SSE 实时推送"""
 
-    def __init__(self, registry, comm, db=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None):
+    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None):
         self._registry = registry
         self._comm = comm
         self._db = db
+        self._告警 = 告警
         self._event_bus = event_bus or 事件总线()
         self._host = host
         self._port = port
@@ -88,6 +89,10 @@ class Web面板:
         a.add_url_rule("/api/v1/history/tasks", "hist_tasks", self._hist_tasks)
         a.add_url_rule("/api/v1/history/patrol", "hist_patrol", self._hist_patrol)
         a.add_url_rule("/api/v1/history/stats", "hist_stats", self._hist_stats)
+
+        # API v1 - 告警
+        a.add_url_rule("/api/v1/alerts", "api_alerts", self._api_alerts)
+        a.add_url_rule("/api/v1/alerts/stats", "api_alert_stats", self._api_alert_stats)
 
         # API v1 - 巡逻
         a.add_url_rule("/api/v1/patrol/points", "patrol_points", self._patrol_points)
@@ -242,6 +247,20 @@ class Web面板:
         if not self._db:
             return fail(400, "数据库未启用")
         return ok(self._db.获取统计())
+
+    # ======================== API v1: 告警 ========================
+
+    def _api_alerts(self):
+        if not self._告警:
+            return ok([])
+        level = request.args.get("level")
+        limit = int(request.args.get("limit", 50))
+        return ok(self._告警.获取告警(limit, level))
+
+    def _api_alert_stats(self):
+        if not self._告警:
+            return ok({"total": 0, "by_level": {}})
+        return ok(self._告警.获取统计())
 
     # ======================== API v1: 巡逻 ========================
 
