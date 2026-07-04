@@ -1,38 +1,40 @@
 #!/usr/bin/env python3
-"""系统日志 — 统一日志记录，控制台 + 文件滚动写入"""
-import os, sys, time, logging
-from logging.handlers import RotatingFileHandler
+"""系统日志 — 统一日志记录，控制台 + 文件按日期写入（只记 WARNING 及以上）"""
+import os, sys, logging
+from datetime import datetime
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
-_handler = None
+_日志器缓存 = {}
+_已初始化 = False
 
 
 def 获取日志器(模块名="系统"):
-    """获取或创建模块日志器，保证只初始化一次"""
-    global _handler
+    """获取模块日志器，文件只记 WARNING+，控制台 INFO+"""
+    global _已初始化
+
+    if 模块名 in _日志器缓存:
+        return _日志器缓存[模块名]
 
     日志器 = logging.getLogger(模块名)
-    if _handler is not None:
+    if _已初始化:
+        _日志器缓存[模块名] = 日志器
         return 日志器
 
     日志器.setLevel(logging.DEBUG)
-
-    # 格式
     fmt = logging.Formatter(
         "[%(asctime)s.%(msecs)03d] [%(levelname)-5s] [%(name)s] %(message)s",
         datefmt="%H:%M:%S",
     )
 
-    # 文件滚动输出（单文件 5MB，保留 3 个）
-    fh = RotatingFileHandler(
-        os.path.join(LOG_DIR, "中央大脑.log"),
-        maxBytes=5 * 1024 * 1024,
-        backupCount=3,
+    # 文件输出 — 每天一个文件，只记 WARNING+
+    日期 = datetime.now().strftime("%Y%m%d")
+    fh = logging.FileHandler(
+        os.path.join(LOG_DIR, f"系统_{日期}.log"),
         encoding="utf-8",
     )
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(logging.WARNING)
     fh.setFormatter(fmt)
     日志器.addHandler(fh)
 
@@ -42,10 +44,6 @@ def 获取日志器(模块名="系统"):
     ch.setFormatter(fmt)
     日志器.addHandler(ch)
 
-    _handler = fh  # 防止被回收
+    _已初始化 = True
+    _日志器缓存[模块名] = 日志器
     return 日志器
-
-
-def 快速日志(模块名="系统"):
-    """快速获取日志器的别名"""
-    return 获取日志器(模块名)

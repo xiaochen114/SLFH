@@ -176,6 +176,8 @@ function switchTab(name){
 
 // ======================== SSE 实时事件 ========================
 const evtSource = new EventSource(API + '/events');
+const _已见告警 = new Set();  // 去重：同类型同消息只提示一次
+
 evtSource.onmessage = function(e){
   try {
     const ev = JSON.parse(e.data);
@@ -184,6 +186,22 @@ evtSource.onmessage = function(e){
     if(ev.type === 'system_health') updateStats(ev.data);
   } catch(ex) {}
 };
+
+// ======================== 告警（去重，每个只显示一次）========================
+function addAlert(alert){
+  const key = (alert.level||'') + '|' + (alert.message||alert.type||'');
+  if(_已见告警.has(key)) return;
+  _已见告警.add(key);
+
+  const feed = $('alertFeed');
+  const empty = feed.querySelector('.empty');
+  if(empty) feed.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = 'alert-item alert-' + (alert.level || 'info');
+  const t = new Date((alert.time || 0)*1000);
+  el.innerHTML = '<span class="time">' + t.toLocaleTimeString() + '</span><span>' + (alert.message || alert.type) + '</span>';
+  feed.appendChild(el);
+}
 
 // ======================== 仪表盘 ========================
 function updateStats(data){
@@ -194,18 +212,6 @@ function updateStats(data){
     '<div class="stat-card"><div class="num">' + (data.robot_count - data.online) + '</div><div class="lbl">离线</div></div>',
     '<div class="stat-card"><div class="num">' + Math.floor(data.uptime / 60) + 'm</div><div class="lbl">运行时长</div></div>',
   ].join('');
-}
-
-function addAlert(alert){
-  const feed = $('alertFeed');
-  const empty = feed.querySelector('.empty');
-  if(empty) feed.innerHTML = '';
-  const el = document.createElement('div');
-  el.className = 'alert-item alert-' + (alert.level || 'info');
-  const t = new Date((alert.time || 0)*1000);
-  el.innerHTML = '<span class="time">' + t.toLocaleTimeString() + '</span><span>' + (alert.message || alert.type) + '</span>';
-  feed.insertBefore(el, feed.firstChild);
-  while(feed.children.length > 50) feed.removeChild(feed.lastChild);
 }
 
 let robotCache = [];
