@@ -49,10 +49,7 @@ E:\zy\
 │   │
 │   ├── 脚本/                 # 训练与工具
 │   │   ├── train.py          # 火情检测模型训练
-│   │   ├── train_merged.py   # 合并数据集训练
-│   │   ├── keyboard_control.py# 键盘遥控机器狗
-│   │   ├── merge_dataset.py  # 数据集合并
-│   │   └── ...
+│   │   └── train_merged.py   # 合并数据集训练
 │   │
 │   ├── models/               # YOLO 模型权重
 │   ├── runs/                 # 训练产出
