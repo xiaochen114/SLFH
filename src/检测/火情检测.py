@@ -23,7 +23,7 @@ class PerceptionResult:
 
 
 class PerceptionSystem:
-    def __init__(self, model_path='E:/zy/runs/detect/train-2/weights/best.pt',
+    def __init__(self, model_path="E:/zy/runs/detect/fire_smoke_cigarette/weights/best.pt"
                  camera_url=0, conf_thresh=0.5, detect_interval=0.2,
                  frame_width=640, frame_height=480):
         self.model_path = model_path
