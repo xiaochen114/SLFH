@@ -106,9 +106,6 @@ class 感知主机控制:
         print(f"[感知主机] 雷达启动中（ping未确认）")
         return True
 
-    def stop_lidar(self):
-        self._exec("pkill -f lslidar; pkill -f livox; pkill -f rslidar", timeout=5)
-
     # ========== 导航 ==========
 
     def start_navigation(self) -> bool:
@@ -200,15 +197,6 @@ class 感知主机控制:
         if "2" in out or "EXECUTING" in out:
             return "navigating"
         return "unknown"
-
-    def get_robot_pose(self) -> str:
-        """获取机器狗当前位姿 (hdl_localization 发布的 /odom)"""
-        out, _ = self._exec(
-            f'source /home/ysc/lite_cog_ros2/nav/install/setup.bash && '
-            f'ros2 topic echo /odom -n1 2>/dev/null | head -15',
-            timeout=5
-        )
-        return out
 
     def get_status(self) -> NavStatus:
         """获取完整状态"""

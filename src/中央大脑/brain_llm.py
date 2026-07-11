@@ -188,5 +188,4 @@ class LLM调度引擎:
 
         return orders
 
-    def 设置提供者(self, provider: str):
-        self._mode = provider  # "auto" / "rule" / "llm"
+

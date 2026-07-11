@@ -26,10 +26,6 @@ class 事件总线:
         """订阅某类事件"""
         self._订阅者.setdefault(事件类型, []).append(回调)
 
-    def 取消订阅(self, 事件类型, 回调):
-        if 事件类型 in self._订阅者:
-            self._订阅者[事件类型] = [cb for cb in self._订阅者[事件类型] if cb != 回调]
-
     # ---- SSE 协议 ----
 
     def sse_生成(self):

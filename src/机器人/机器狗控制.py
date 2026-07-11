@@ -114,29 +114,9 @@ class DogController:
     def go_home(self):
         self._send(CMD["HOME"])
 
-    def set_mode_stand(self):
-        self._send(CMD["MODE_STAND"])
-
-    def set_mode_move(self):
-        self._send(CMD["MODE_MOVE"])
-
-    def set_gait(self, name):
-        m = {"slow": CMD["GAIT_SLOW"], "medium": CMD["GAIT_MEDIUM"],
-             "fast": CMD["GAIT_FAST"], "creep": CMD["GAIT_CREEP"],
-             "obstacle": CMD["GAIT_OBSTACLE"]}
-        if name in m:
-            self._send(m[name])
-
     def set_continuous_motion(self, on):
         val = -1 if on else 2
         self._send(CMD["CONT_MOTION"], val)
-
-    def do_action(self, name):
-        if name in ACTIONS:
-            self._send(ACTIONS[name])
-
-    def set_auto_mode(self):
-        self._send(CMD["MODE_AUTO"])
 
     # ===== patrol =====
     def start_patrol(self, speed=20000):

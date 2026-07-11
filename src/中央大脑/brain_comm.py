@@ -58,26 +58,5 @@ class 通信管理器:
             except queue.Empty:
                 pass
 
-    # === 离线消息 ===
-
-    def 重连补发(self, robot_id: str):
-        """机器人重连时补发离线期间的指令"""
-        still_pending = []
-        count = 0
-        for rid, order in self._pending_orders:
-            if rid == robot_id:
-                robot = self._registry.获取机器人(robot_id)
-                if robot and robot.is_connected():
-                    robot.execute_order(order)
-                    count += 1
-                    continue
-            still_pending.append((rid, order))
-        self._pending_orders = still_pending
-        if count > 0:
-            print(f"[通信] 已补发 {count} 条离线指令给 {robot_id}")
-
-    def 获取待发数量(self) -> int:
-        return len(self._pending_orders)
-
     def 停止(self):
         self._stop = True

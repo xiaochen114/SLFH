@@ -79,11 +79,6 @@ class 自主巡逻:
             self._log(f"删除 {p.name}")
             self.保存配置()
 
-    def 清空点(self):
-        self._points.clear()
-        self.状态.总点数 = 0
-        self.保存配置()
-
     def 获取点列表(self):
         return [{"index": i, "x": p.x, "y": p.y, "yaw": p.yaw, "name": p.name}
                 for i, p in enumerate(self._points)]

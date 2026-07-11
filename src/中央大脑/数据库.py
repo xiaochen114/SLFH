@@ -146,26 +146,6 @@ class 数据库:
 
     # ---- 巡逻日志 ----
 
-    def 记录巡逻(self, point_index, point_name, x, y, status, started_at=None):
-        with self._锁:
-            conn = self._连接()
-            conn.execute(
-                "INSERT INTO patrol_log(point_index, point_name, x, y, status, started_at) VALUES (?,?,?,?,?,?)",
-                (point_index, point_name, x, y, status, started_at or time.time()),
-            )
-            conn.commit()
-            conn.close()
-
-    def 更新巡逻状态(self, pid, status, ended_at=None):
-        with self._锁:
-            conn = self._连接()
-            conn.execute(
-                "UPDATE patrol_log SET status=?, ended_at=? WHERE id=?",
-                (status, ended_at or time.time(), pid),
-            )
-            conn.commit()
-            conn.close()
-
     def 查询巡逻日志(self, limit=100):
         with self._锁:
             conn = self._连接()
@@ -187,15 +167,6 @@ class 数据库:
             )
             conn.commit()
             conn.close()
-
-    def 读取配置(self, key, default=None):
-        with self._锁:
-            conn = self._连接()
-            row = conn.execute("SELECT value FROM system_config WHERE key=?", (key,)).fetchone()
-            conn.close()
-            if row:
-                return json.loads(row["value"])
-            return default
 
     def 获取统计(self):
         """系统概览统计"""

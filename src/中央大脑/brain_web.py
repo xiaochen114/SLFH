@@ -22,20 +22,6 @@ def fail(code=400, message="error", data=None):
     return jsonify({"code": code, "message": message, "data": data}), code
 
 
-def require_json(keys=()):
-    """装饰器：校验 JSON body 必需字段"""
-    def deco(fn):
-        def wrapper(*args, **kwargs):
-            d = request.get_json(silent=True)
-            if d is None:
-                return fail(400, "请求体必须是 JSON")
-            for k in keys:
-                if k not in d:
-                    return fail(400, f"缺少必需字段: {k}")
-            return fn(d, *args, **kwargs)
-        wrapper.__name__ = fn.__name__
-        return wrapper
-    return deco
 
 
 # ======================== Web 面板 ========================
