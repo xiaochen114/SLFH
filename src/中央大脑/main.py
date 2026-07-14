@@ -158,11 +158,26 @@ class 中央大脑:
             print(f"[中央大脑] {robot.robot_id} 连接失败")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="中央大脑")
     parser.add_argument("--patrol", action="store_true", help="启用自主巡逻模块")
+    parser.add_argument("--simulate", action="store_true", help="模拟模式(不连真狗)")
     parser.add_argument("--port", type=int, default=5000, help="Web端口")
     args = parser.parse_args()
 
     brain = 中央大脑(web_port=args.port, 启用巡逻=args.patrol)
+
+    if args.simulate:
+        from 机器人.机器人模拟器 import 模拟机器人
+        brain.注册机器人(模拟机器人("模拟狗1"))
+        print("[系统] 模拟模式")
+    else:
+        from 机器人.机器狗_绝影 import 机器狗_绝影
+        brain.注册机器人(机器狗_绝影("绝影1号"))
+        print("[系统] 真机模式")
+
     brain.启动()
+
+
+if __name__ == "__main__":
+    main()
