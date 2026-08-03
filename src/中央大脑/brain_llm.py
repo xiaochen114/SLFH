@@ -5,9 +5,10 @@ import json, time, os, urllib.request, urllib.error
 
 from 机器人.robot_base import RobotOrder
 
-# DeepSeek API (兼容 OpenAI 格式)
-API_URL = os.environ.get("LLM_API_URL", "https://api.deepseek.com/v1/chat/completions")
-API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+# 大模型 API 配置（OpenAI 兼容格式）
+API_URL = os.environ.get("LLM_API_URL", "http://10.122.4.100:31277/inference-api/exp-api/inf-1512399859630841856/v1/chat/completions")
+API_KEY = os.environ.get("DEEPSEEK_API_KEY", "YbhkjOUt66kpdoTSmK4PPqqBbqTgYnTwioUkQupssmg")
+API_MODEL = os.environ.get("LLM_API_MODEL", "default")
 
 系统提示词 = """你是一个多机器人调度系统的决策引擎。根据当前状态输出调度指令。
 
@@ -38,8 +39,10 @@ API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 class LLM调度引擎:
     """LLM 调度引擎 — 可切换规则/API 模式"""
 
-    def __init__(self, api_key=None, mode="auto"):
+    def __init__(self, api_url=None, api_key=None, api_model=None, mode="auto"):
+        self._api_url = api_url or API_URL
         self._api_key = api_key or API_KEY
+        self._api_model = api_model or API_MODEL
         self._mode = mode  # auto / rule / llm
         self._fallback_count = 0
 
@@ -97,17 +100,17 @@ class LLM调度引擎:
 
         # 调用 API
         body = json.dumps({
-            "model": "deepseek-chat",
+            "model": self._api_model,
             "messages": [
                 {"role": "system", "content": 系统提示词},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.1,
+            "temperature": 0,
             "max_tokens": 1024,
         }).encode()
 
         req = urllib.request.Request(
-            API_URL,
+            self._api_url,
             data=body,
             headers={
                 "Content-Type": "application/json",
@@ -116,7 +119,7 @@ class LLM调度引擎:
             method="POST",
         )
 
-        resp = urllib.request.urlopen(req, timeout=15)
+        resp = urllib.request.urlopen(req, timeout=60)
         result = json.loads(resp.read().decode())
 
         content = result["choices"][0]["message"]["content"]

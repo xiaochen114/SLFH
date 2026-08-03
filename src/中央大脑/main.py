@@ -19,11 +19,17 @@ from 机器人.感知主机控制 import 感知主机控制
 class 中央大脑:
     """主控制器 — 组装模块、调度循环、事件广播"""
 
-    def __init__(self, web_host="0.0.0.0", web_port=5000, 启用巡逻=False):
+    def __init__(self, web_host="0.0.0.0", web_port=5000, 启用巡逻=False, 配置=None):
         self.事件总线 = 事件总线()
         self.registry = 机器人注册中心(self.事件总线)
         self.comm = 通信管理器(self.registry)
-        self.llm = LLM调度引擎()
+        # 从配置读取 LLM 参数
+        cfg = 配置 or {}
+        self.llm = LLM调度引擎(
+            api_url=cfg.get("llm_api_url"),
+            api_key=cfg.get("llm_api_key"),
+            api_model=cfg.get("llm_api_model"),
+        )
         self.scheduler = 任务规划器()
         self.ops_agent = 运维Agent(self.registry)
         self.db = 数据库()
@@ -165,7 +171,11 @@ def main():
     parser.add_argument("--port", type=int, default=5000, help="Web端口")
     args = parser.parse_args()
 
-    brain = 中央大脑(web_port=args.port, 启用巡逻=args.patrol)
+    # 加载配置
+    from 配置.配置加载 import 加载配置
+    cfg = 加载配置()
+
+    brain = 中央大脑(web_port=args.port, 启用巡逻=args.patrol, 配置=cfg)
 
     if args.simulate:
         from 机器人.机器人模拟器 import 模拟机器人

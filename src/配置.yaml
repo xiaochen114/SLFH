@@ -19,3 +19,8 @@ sensor_type: "ultrasonic"
 # --- Web面板 ---
 http_host: "0.0.0.0"
 http_port: 5000
+
+# --- LLM 调度 ---
+llm_api_url: "http://10.122.4.100:31277/inference-api/exp-api/inf-1512399859630841856/v1/chat/completions"
+llm_api_key: "YbhkjOUt66kpdoTSmK4PPqqBbqTgYnTwioUkQupssmg"
+llm_api_model: "default"
