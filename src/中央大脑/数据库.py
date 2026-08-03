@@ -71,6 +71,21 @@ class 数据库:
                     value TEXT,
                     updated_at REAL DEFAULT (strftime('%s','now'))
                 );
+
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source TEXT NOT NULL,           -- 来源: yolo / robot / system
+                    type TEXT NOT NULL,             -- 事件类型: fire_detected / ...
+                    label TEXT,                     -- 标签: 火焰 / 烟雾 / 急停
+                    robot_id TEXT,                  -- 相关机器人
+                    level INTEGER DEFAULT 0,        -- 严重等级
+                    data_json TEXT,                 -- 事件数据
+                    consumed INTEGER DEFAULT 0,     -- 0=未消费 1=已消费
+                    created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+                CREATE INDEX IF NOT EXISTS idx_events_consumed ON events(consumed);
+                CREATE INDEX IF NOT EXISTS idx_events_time ON events(created_at);
             """)
             conn.commit()
             conn.close()
@@ -153,6 +168,71 @@ class 数据库:
                 "SELECT * FROM patrol_log ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
+            conn.close()
+            return [dict(r) for r in rows]
+
+    # ---- 事件队列（带标签，即取即用）----
+
+    def 记录事件(self, source, type, label="", robot_id=None, level=0, data=None):
+        """写入事件到数据库（默认未消费）"""
+        with self._锁:
+            conn = self._连接()
+            conn.execute(
+                "INSERT INTO events(source, type, label, robot_id, level, data_json) VALUES (?,?,?,?,?,?)",
+                (source, type, label, robot_id, level, json.dumps(data or {}, ensure_ascii=False)),
+            )
+            conn.commit()
+            conn.close()
+
+    def 取未消费事件(self, source=None, type=None, limit=20):
+        """取未消费事件（可筛选来源/类型），取出即标记已消费"""
+        with self._锁:
+            conn = self._连接()
+            sql = "SELECT * FROM events WHERE consumed=0"
+            params = []
+            if source:
+                sql += " AND source=?"
+                params.append(source)
+            if type:
+                sql += " AND type=?"
+                params.append(type)
+            sql += " ORDER BY created_at ASC LIMIT ?"
+            params.append(limit)
+            rows = conn.execute(sql, params).fetchall()
+            # 标记已消费
+            ids = [r["id"] for r in rows]
+            if ids:
+                conn.execute(
+                    f"UPDATE events SET consumed=1 WHERE id IN ({','.join('?' * len(ids))})",
+                    ids,
+                )
+            conn.commit()
+            conn.close()
+            # 解析 data_json，合并进事件 dict
+            result = []
+            for r in rows:
+                d = dict(r)
+                d.update(json.loads(d.pop("data_json", "{}") or "{}"))
+                result.append(d)
+            return result
+
+    def 查询事件(self, source=None, type=None, limit=100):
+        """查询事件历史（不论是否消费）"""
+        with self._锁:
+            conn = self._连接()
+            sql = "SELECT * FROM events"
+            conds, params = [], []
+            if source:
+                conds.append("source=?")
+                params.append(source)
+            if type:
+                conds.append("type=?")
+                params.append(type)
+            if conds:
+                sql += " WHERE " + " AND ".join(conds)
+            sql += " ORDER BY id DESC LIMIT ?"
+            params.append(limit)
+            rows = conn.execute(sql, params).fetchall()
             conn.close()
             return [dict(r) for r in rows]
 

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""YOLO 火情检测服务 — 包装 PerceptionSystem，检测结果发布到事件总线"""
+"""YOLO 火情检测服务 — 包装 PerceptionSystem，检测结果写入事件库"""
 import time, threading
 
 
 class 检测服务:
-    """后台轮询 YOLO 检测，检测到火情/烟雾发布到事件总线"""
+    """后台轮询 YOLO 检测，检测到火情/烟雾写入带标签的事件库"""
 
-    def __init__(self, 事件总线, 模型路径, 摄像头=0, 置信度=0.5, 间隔=1.0):
+    def __init__(self, 事件总线, 数据库=None, 模型路径=None, 摄像头=0, 置信度=0.5, 间隔=1.0):
         self._bus = 事件总线
+        self._db = 数据库
         self._模型路径 = 模型路径
         self._摄像头 = 摄像头
         self._置信度 = 置信度
@@ -52,29 +53,53 @@ class 检测服务:
                 if level != self._上次等级:
                     self._上次等级 = level
                     if level >= 3:
-                        self._发布("fire_detected", r, "火焰")
+                        self._产生("fire_detected", r, "火焰", level)
                     elif level == 2:
-                        self._发布("smoke_detected", r, "烟雾")
+                        self._产生("smoke_detected", r, "烟雾", level)
                     elif level == 1:
-                        self._发布("cigarette_detected", r, "烟头")
+                        self._产生("cigarette_detected", r, "烟头", level)
             except:
                 pass
             time.sleep(self._间隔)
 
-    def _发布(self, 事件类型, r, 名称):
+    def _产生(self, 事件类型, r, 名称, level):
+        """检测到事件：写数据库（贴标签）+ 广播"""
         dets = [{"name": d.name, "confidence": d.confidence} for d in r.detections]
-        print(f"[检测] 发现{名称}！等级={r.alert_level} {dets}")
-        self._bus.发布(事件类型, {
-            "alert_level": r.alert_level,
+        data = {
+            "alert_level": level,
             "detections": dets,
             "position": (0, 0),  # YOLO 无定位，位置由机器狗回传
-        })
+        }
+        print(f"[检测] 发现{名称}！等级={level} {dets}")
+        # 写入事件库，贴标签（来源=yolo，谁该处理谁取）
+        if self._db:
+            self._db.记录事件(
+                source="yolo",
+                type=事件类型,
+                label=名称,
+                level=level,
+                data=data,
+            )
+        # 广播（SSE 前端实时显示）
+        if self._bus:
+            self._bus.发布(事件类型, data)
 
     def 模拟火情(self):
-        """测试用：发布一条模拟火情事件"""
+        """测试用：写入一条模拟火情事件"""
         print("[检测] 模拟火情事件")
-        self._bus.发布("fire_detected", {
+        data = {
             "alert_level": 3,
             "detections": [{"name": "fire", "confidence": 0.95}],
             "position": (2, 3),
-        })
+        }
+        if self._db:
+            self._db.记录事件(
+                source="yolo",
+                type="fire_detected",
+                label="火焰",
+                level=3,
+                data=data,
+            )
+        if self._bus:
+            self._bus.发布("fire_detected", data)
+

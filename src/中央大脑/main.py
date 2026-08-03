@@ -44,19 +44,16 @@ class 中央大脑:
         if 启用巡逻:
             self.感知主机 = 感知主机控制()
 
-        # YOLO 火情检测
+        # YOLO 火情检测（事件写入数据库，带标签即取即用）
         self.检测 = None
-        self._检测事件 = []  # 检测事件队列，喂给 LLM
         if cfg.get("model_path"):
             self.检测 = 检测服务(
                 self.事件总线,
+                self.db,
                 模型路径=cfg["model_path"],
                 摄像头=cfg.get("camera_url", 0),
                 置信度=cfg.get("conf_thresh", 0.5),
             )
-            for etype in ("fire_detected", "smoke_detected", "cigarette_detected"):
-                self.事件总线.订阅(etype, lambda e, t=etype: self._检测事件.append(
-                    {**e.get("data", {}), "type": t}))
 
         self.web = Web面板(
             self.registry, self.comm, self.db, self.告警, self.事件总线,
@@ -133,10 +130,11 @@ class 中央大脑:
                         except:
                             pass
 
-                # LLM 决策（带上 YOLO 检测事件）
+                # LLM 决策（从事件库取未消费的检测事件，取走即消费）
+                events = self.db.取未消费事件(source="yolo", limit=10)
                 ctx = {
                     "robots": self.registry.导出全景().get("robots", []),
-                    "events": list(self._检测事件[-10:]),  # 最近 10 条检测事件
+                    "events": events,
                 }
                 orders = self.llm.决策(ctx)
                 if orders:
