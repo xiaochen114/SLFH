@@ -15,6 +15,7 @@ from 中央大脑.监控告警 import 监控告警
 from 中央大脑.检测服务 import 检测服务
 from 中央大脑.自主巡逻 import 自主巡逻
 from 机器人.感知主机控制 import 感知主机控制
+from 机器人.robot_base import RobotOrder
 
 
 class 中央大脑:
@@ -130,8 +131,19 @@ class 中央大脑:
                         except:
                             pass
 
-                # LLM 决策（从事件库取未消费的检测事件，取走即消费）
+                # LLM 决策（从事件库取未消费的检测事件，紧急优先，取走即消费）
                 events = self.db.取未消费事件(source="yolo", limit=10)
+                # 特急事件 → 立刻急停所有在线机器人
+                for ev in events:
+                    if ev.get("priority", 0) >= 2:
+                        print(f"[中央大脑] ⚠ 特急事件: {ev.get('label','')} 紧急急停所有机器人")
+                        for r in self.registry.获取所有机器人():
+                            if r.is_connected():
+                                order = RobotOrder(
+                                    order_id=f"urgent_{int(time.time())}",
+                                    type="alert", params={"reason": "urgent_fire"},
+                                    priority=3, source="brain")
+                                self.comm.发送指令(r.robot_id, order)
                 ctx = {
                     "robots": self.registry.导出全景().get("robots", []),
                     "events": events,

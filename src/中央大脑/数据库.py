@@ -79,12 +79,14 @@ class 数据库:
                     label TEXT,                     -- 标签: 火焰 / 烟雾 / 急停
                     robot_id TEXT,                  -- 相关机器人
                     level INTEGER DEFAULT 0,        -- 严重等级
+                    priority INTEGER DEFAULT 0,     -- 紧急度: 0=普通 1=紧急 2=特急
                     data_json TEXT,                 -- 事件数据
                     consumed INTEGER DEFAULT 0,     -- 0=未消费 1=已消费
                     created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
                 CREATE INDEX IF NOT EXISTS idx_events_consumed ON events(consumed);
+                CREATE INDEX IF NOT EXISTS idx_events_priority ON events(priority);
                 CREATE INDEX IF NOT EXISTS idx_events_time ON events(created_at);
             """)
             conn.commit()
@@ -173,19 +175,19 @@ class 数据库:
 
     # ---- 事件队列（带标签，即取即用）----
 
-    def 记录事件(self, source, type, label="", robot_id=None, level=0, data=None):
-        """写入事件到数据库（默认未消费）"""
+    def 记录事件(self, source, type, label="", robot_id=None, level=0, priority=0, data=None):
+        """写入事件到数据库（默认未消费）。priority: 0=普通 1=紧急 2=特急"""
         with self._锁:
             conn = self._连接()
             conn.execute(
-                "INSERT INTO events(source, type, label, robot_id, level, data_json) VALUES (?,?,?,?,?,?)",
-                (source, type, label, robot_id, level, json.dumps(data or {}, ensure_ascii=False)),
+                "INSERT INTO events(source, type, label, robot_id, level, priority, data_json) VALUES (?,?,?,?,?,?,?)",
+                (source, type, label, robot_id, level, priority, json.dumps(data or {}, ensure_ascii=False)),
             )
             conn.commit()
             conn.close()
 
     def 取未消费事件(self, source=None, type=None, limit=20):
-        """取未消费事件（可筛选来源/类型），取出即标记已消费"""
+        """取未消费事件（可筛选来源/类型），紧急度高的优先，取出即标记已消费"""
         with self._锁:
             conn = self._连接()
             sql = "SELECT * FROM events WHERE consumed=0"
@@ -196,7 +198,7 @@ class 数据库:
             if type:
                 sql += " AND type=?"
                 params.append(type)
-            sql += " ORDER BY created_at ASC LIMIT ?"
+            sql += " ORDER BY priority DESC, created_at ASC LIMIT ?"
             params.append(limit)
             rows = conn.execute(sql, params).fetchall()
             # 标记已消费

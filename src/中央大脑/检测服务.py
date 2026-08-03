@@ -53,40 +53,42 @@ class 检测服务:
                 if level != self._上次等级:
                     self._上次等级 = level
                     if level >= 3:
-                        self._产生("fire_detected", r, "火焰", level)
+                        self._产生("fire_detected", r, "火焰", level, priority=2)  # 特急
                     elif level == 2:
-                        self._产生("smoke_detected", r, "烟雾", level)
+                        self._产生("smoke_detected", r, "烟雾", level, priority=1)  # 紧急
                     elif level == 1:
-                        self._产生("cigarette_detected", r, "烟头", level)
+                        self._产生("cigarette_detected", r, "烟头", level, priority=0)  # 普通
             except:
                 pass
             time.sleep(self._间隔)
 
-    def _产生(self, 事件类型, r, 名称, level):
-        """检测到事件：写数据库（贴标签）+ 广播"""
+    def _产生(self, 事件类型, r, 名称, level, priority=0):
+        """检测到事件：写数据库（贴标签+紧急度）+ 广播"""
         dets = [{"name": d.name, "confidence": d.confidence} for d in r.detections]
         data = {
             "alert_level": level,
             "detections": dets,
             "position": (0, 0),  # YOLO 无定位，位置由机器狗回传
         }
-        print(f"[检测] 发现{名称}！等级={level} {dets}")
-        # 写入事件库，贴标签（来源=yolo，谁该处理谁取）
+        prio_label = {2: "特急", 1: "紧急", 0: "普通"}[priority]
+        print(f"[检测] 发现{名称}！[{prio_label}] 等级={level} {dets}")
+        # 写入事件库，贴标签（来源=yolo + 紧急度）
         if self._db:
             self._db.记录事件(
                 source="yolo",
                 type=事件类型,
                 label=名称,
                 level=level,
+                priority=priority,
                 data=data,
             )
         # 广播（SSE 前端实时显示）
         if self._bus:
-            self._bus.发布(事件类型, data)
+            self._bus.发布(事件类型, {**data, "priority": priority})
 
     def 模拟火情(self):
-        """测试用：写入一条模拟火情事件"""
-        print("[检测] 模拟火情事件")
+        """测试用：写入一条模拟火情事件（特急）"""
+        print("[检测] 模拟火情事件[特急]")
         data = {
             "alert_level": 3,
             "detections": [{"name": "fire", "confidence": 0.95}],
@@ -98,8 +100,9 @@ class 检测服务:
                 type="fire_detected",
                 label="火焰",
                 level=3,
+                priority=2,  # 特急
                 data=data,
             )
         if self._bus:
-            self._bus.发布("fire_detected", data)
+            self._bus.发布("fire_detected", {**data, "priority": 2})
 
