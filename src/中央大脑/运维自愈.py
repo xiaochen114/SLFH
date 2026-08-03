@@ -74,6 +74,7 @@ class 运维自愈:
         ssh_cfg = 诊断器.get("ssh", {})
         检查列表 = 诊断器.get("检查", [])
         修复列表 = 诊断器.get("修复", [])
+        验证列表 = 诊断器.get("验证", [])
         诊断日志 = {"robot": robot_id, "symptom": symptom, "步骤": []}
 
         for 检查 in 检查列表:
@@ -84,15 +85,15 @@ class 运维自愈:
             self._记录("诊断_" + 名称, {"robot": robot_id, "命令": 命令, "结果": str(结果)[:200]})
             for 修复 in 修复列表:
                 if 修复["匹配"] in str(结果):
-                    self._执行修复(修复, ssh_cfg, robot_id)
+                    self._执行修复(修复, ssh_cfg, robot_id, 验证列表)
                     return
         # 规则无结论 → LLM增强
         if not any(r["匹配"] in str(x.get("结果", "")) for x in 诊断日志["步骤"] for r in 修复列表):
             llm建议 = self._LLM诊断(设备类型, 诊断日志)
             if llm建议:
-                self._执行修复(llm建议, ssh_cfg, robot_id)
+                self._执行修复(llm建议, ssh_cfg, robot_id, 验证列表)
 
-    def _执行修复(self, 修复, ssh_cfg, robot_id):
+    def _执行修复(self, 修复, ssh_cfg, robot_id, 验证列表=None):
         动作 = 修复["动作"]
         if self._闸门.判断(动作):
             with self._锁:
@@ -103,11 +104,11 @@ class 运维自愈:
             print(f"[自愈] 自动修复: {动作}")
             结果 = self._执行命令(ssh_cfg, 动作)
             self._记录("自动修复", {"robot": robot_id, "动作": 动作, "结果": str(结果)[:200]})
-            self._验证恢复(ssh_cfg, robot_id)
+            self._验证恢复(ssh_cfg, robot_id, 验证列表)
 
-    def _验证恢复(self, ssh_cfg, robot_id):
+    def _验证恢复(self, ssh_cfg, robot_id, 验证列表=None):
         time.sleep(2)
-        for 检查 in self._诊断器.get("_验证", []):
+        for 检查 in (验证列表 or []):
             命令 = 检查["命令"].format(host=ssh_cfg.get("host", ""))
             结果 = self._执行命令(ssh_cfg, 命令)
             self._记录("验证_" + 检查["名称"], {"robot": robot_id, "结果": str(结果)[:200]})

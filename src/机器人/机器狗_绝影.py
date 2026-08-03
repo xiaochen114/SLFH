@@ -52,7 +52,7 @@ class 机器狗_绝影(RobotBase):
                 return OrderResult(order.order_id, True, "停止")
 
             elif order.type == "alert":
-                self._dog.alert()
+                self._dog.emergency_stop()
                 return OrderResult(order.order_id, True, "紧急停止")
 
             elif order.type == "return":

@@ -144,6 +144,3 @@ class DogController:
         self._axis["yaw"] = 0
         self.state["mode"] = old
         if old == "patrolling": self.start_patrol()
-
-    def alert(self):
-        self.emergency_stop()
