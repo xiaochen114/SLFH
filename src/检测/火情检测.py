@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """YOLO火情检测模块 - 独立可复用"""
-import time, threading
+import os, time, threading
 from dataclasses import dataclass, field
 from typing import List, Dict
+
+# 项目根目录（检测 的上一级）
+项目根 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+默认模型 = os.path.join(项目根, 'runs', 'detect', 'fire_smoke_cigarette', 'weights', 'best.pt')
 
 @dataclass
 class Detection:
@@ -23,9 +27,11 @@ class PerceptionResult:
 
 
 class PerceptionSystem:
-    def __init__(self, model_path="E:/zy/runs/detect/fire_smoke_cigarette/weights/best.pt",
+    def __init__(self, model_path=None,
                  camera_url=0, conf_thresh=0.5, detect_interval=0.2,
                  frame_width=640, frame_height=480):
+        if model_path is None:
+            model_path = 默认模型
         self.model_path = model_path
         self.camera_url = camera_url
         self.conf_thresh = conf_thresh

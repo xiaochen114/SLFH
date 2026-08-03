@@ -2,8 +2,11 @@
 """配置加载 — 从 YAML 读取系统配置"""
 import os
 
+# 项目根目录（src 的上一级）
+项目根 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 DEFAULT_CONFIG = {
-    'model_path': 'E:/zy/runs/detect/train-2/weights/best.pt',
+    'model_path': os.path.join(项目根, 'runs', 'detect', 'train-2', 'weights', 'best.pt'),
     'conf_thresh': 0.5, 'detect_interval': 0.2,
     'camera_url': 0, 'frame_width': 640, 'frame_height': 480,
     'motion_ip': '192.168.1.120', 'cmd_port': 43893, 'state_port': 43894,

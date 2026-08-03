@@ -50,8 +50,7 @@ E:\zy\
 │   │   └── brain_web.py      # RESTful API v1 + SSE
 │   │
 │   ├── 面板/                 # 可视化界面
-│   │   ├── web服务器.py       # Flask Web 服务器
-│   │   └── web_dashboard.html# 管理面板
+│   │   └── web_dashboard.html# 管理面板（由中央大脑 brain_web 服务）
 │   │
 │   ├── 脚本/                 # 训练与工具
 │   │   ├── train.py          # 火情检测模型训练

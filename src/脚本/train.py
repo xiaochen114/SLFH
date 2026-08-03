@@ -1,12 +1,14 @@
 # train.py
 import os
 
-from sympy import false
-
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"   # 强制只使用 NVIDIA 独显
 
 import torch
 from ultralytics import YOLO
+
+# 项目根目录（脚本 的上一级）
+项目根 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+数据集路径 = os.path.join(项目根, '训练集', '火焰烟雾数据集', 'dataset.yaml')
 
 # 把诊断代码放到主程序保护块内，这样只会在主进程中执行一次
 if __name__ == '__main__':
@@ -22,9 +24,9 @@ if __name__ == '__main__':
 
     # 开始训练
     results = model.train(
-        data="E:/zy/训练集/火焰烟雾数据集/dataset.yaml",
+        data=数据集路径,
         epochs=100,
-        imgsz=320 ,
+        imgsz=320,
         batch=24,
         workers=4,
         cache=False,
