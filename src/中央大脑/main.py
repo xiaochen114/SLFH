@@ -12,6 +12,7 @@ from 中央大脑.brain_ops_agent import 运维Agent
 from 中央大脑.事件总线 import 事件总线
 from 中央大脑.数据库 import 数据库
 from 中央大脑.监控告警 import 监控告警
+from 中央大脑.检测服务 import 检测服务
 from 中央大脑.自主巡逻 import 自主巡逻
 from 机器人.感知主机控制 import 感知主机控制
 
@@ -43,6 +44,20 @@ class 中央大脑:
         if 启用巡逻:
             self.感知主机 = 感知主机控制()
 
+        # YOLO 火情检测
+        self.检测 = None
+        self._检测事件 = []  # 检测事件队列，喂给 LLM
+        if cfg.get("model_path"):
+            self.检测 = 检测服务(
+                self.事件总线,
+                模型路径=cfg["model_path"],
+                摄像头=cfg.get("camera_url", 0),
+                置信度=cfg.get("conf_thresh", 0.5),
+            )
+            for etype in ("fire_detected", "smoke_detected", "cigarette_detected"):
+                self.事件总线.订阅(etype, lambda e, t=etype: self._检测事件.append(
+                    {**e.get("data", {}), "type": t}))
+
         self.web = Web面板(
             self.registry, self.comm, self.db, self.告警, self.事件总线,
             web_host, web_port, patrol=self.patrol,
@@ -59,6 +74,10 @@ class 中央大脑:
             else:
                 print("[中央大脑] 感知主机连接失败，巡逻不可用")
 
+        # 启动 YOLO 火情检测
+        if self.检测:
+            self.检测.启动()
+
         # 启动 Web（后台线程）
         t = threading.Thread(target=self.web.启动, daemon=True)
         t.start()
@@ -72,6 +91,8 @@ class 中央大脑:
         self._running = False
         self.registry.停止()
         self.comm.停止()
+        if self.检测:
+            self.检测.停止()
         if self.patrol:
             self.patrol.停止()
         if self.感知主机:
@@ -112,10 +133,10 @@ class 中央大脑:
                         except:
                             pass
 
-                # LLM 决策
+                # LLM 决策（带上 YOLO 检测事件）
                 ctx = {
                     "robots": self.registry.导出全景().get("robots", []),
-                    "events": [],
+                    "events": list(self._检测事件[-10:]),  # 最近 10 条检测事件
                 }
                 orders = self.llm.决策(ctx)
                 if orders:
