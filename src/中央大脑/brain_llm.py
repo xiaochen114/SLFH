@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""LLM 调度引擎 — 接入 DeepSeek API 做智能调度决策
-   支持降级：API 不可用时回退到规则模式"""
-import json, time, os, urllib.request, urllib.error
+"""LLM 调度引擎 — 接入大模型 API 做智能调度决策
+   降级：API 不可用时回退规则模式，后台自动重连"""
+import json, time, os, threading, urllib.request, urllib.error
 
 from 机器人.robot_base import RobotOrder
 
@@ -9,6 +9,11 @@ from 机器人.robot_base import RobotOrder
 API_URL = os.environ.get("LLM_API_URL", "http://10.122.4.100:31277/inference-api/exp-api/inf-1512399859630841856/v1/chat/completions")
 API_KEY = os.environ.get("DEEPSEEK_API_KEY", "YbhkjOUt66kpdoTSmK4PPqqBbqTgYnTwioUkQupssmg")
 API_MODEL = os.environ.get("LLM_API_MODEL", "default")
+
+# 降级参数
+LLM_TIMEOUT = 8          # 单次请求超时(秒)，防止调度循环卡死
+失败降级阈值 = 2          # 连续失败 N 次后进入降级模式
+重连间隔 = 30             # 降级模式下每 N 秒尝试重连
 
 系统提示词 = """你是一个多机器人调度系统的决策引擎。根据当前状态输出调度指令。
 
@@ -37,14 +42,68 @@ API_MODEL = os.environ.get("LLM_API_MODEL", "default")
 
 
 class LLM调度引擎:
-    """LLM 调度引擎 — 可切换规则/API 模式"""
+    """LLM 调度引擎 — 优先 LLM，失败降级规则，后台自动重连"""
 
-    def __init__(self, api_url=None, api_key=None, api_model=None, mode="auto"):
+    def __init__(self, api_url=None, api_key=None, api_model=None, 数据库=None, mode="auto"):
         self._api_url = api_url or API_URL
         self._api_key = api_key or API_KEY
         self._api_model = api_model or API_MODEL
+        self._db = 数据库
         self._mode = mode  # auto / rule / llm
-        self._fallback_count = 0
+        self._连续失败 = 0
+        self._降级中 = False
+        self._最后错误 = ""
+        self._最后成功 = 0
+        self._重连线程 = None
+
+    # ---- 状态 ----
+
+    def 获取状态(self) -> dict:
+        """当前 LLM 连接状态（前端展示用）"""
+        return {
+            "mode": "rule" if self._降级中 else "llm",
+            "降级中": self._降级中,
+            "连续失败": self._连续失败,
+            "最后错误": self._最后错误,
+            "最后成功": self._最后成功,
+        }
+
+    def _保存状态(self):
+        if self._db:
+            try:
+                self._db.保存配置("llm_status", self.获取状态())
+            except:
+                pass
+
+    def _进入降级(self, error):
+        self._降级中 = True
+        self._最后错误 = str(error)[:200]
+        print(f"[LLM] 降级到规则模式: {error}")
+        self._保存状态()
+        # 启动后台重连线程（只启动一次）
+        if not self._重连线程 or not self._重连线程.is_alive():
+            self._重连线程 = threading.Thread(target=self._重连循环, daemon=True)
+            self._重连线程.start()
+
+    def _恢复(self):
+        if self._降级中:
+            print("[LLM] API 恢复，切回 LLM 模式")
+        self._降级中 = False
+        self._连续失败 = 0
+        self._最后成功 = time.time()
+        self._保存状态()
+
+    def _重连循环(self):
+        """降级模式下周期性尝试重连"""
+        while self._降级中:
+            time.sleep(重连间隔)
+            try:
+                # 轻量探测：不发真实调度请求，直接问一次
+                self._llm决策({"robots": [], "events": []})
+                self._恢复()
+            except Exception as e:
+                self._最后错误 = str(e)[:200]
+                self._保存状态()
 
     def 决策(self, context: dict) -> list:
         """
@@ -52,7 +111,7 @@ class LLM调度引擎:
         context: {robots: [...], events: [...]}
         返回: RobotOrder 列表
         """
-        if self._mode == "rule":
+        if self._mode == "rule" or self._降级中:
             return self._规则决策(context)
 
         # 尝试 LLM API
@@ -60,15 +119,17 @@ class LLM调度引擎:
             if self._api_key:
                 orders = self._llm决策(context)
                 if orders is not None:
-                    self._fallback_count = 0
+                    self._恢复()
                     return orders
         except Exception as e:
-            print(f"[LLM] API 调用失败: {e}")
+            self._连续失败 += 1
+            self._最后错误 = str(e)[:200]
+            if self._连续失败 >= 失败降级阈值:
+                self._进入降级(e)
+            else:
+                print(f"[LLM] 调用失败({self._连续失败}/{失败降级阈值}): {e}")
 
         # 降级到规则
-        self._fallback_count += 1
-        if self._fallback_count == 1:
-            print("[LLM] API 不可用，降级到规则模式")
         return self._规则决策(context)
 
     # ======================== LLM 决策 ========================
@@ -119,7 +180,7 @@ class LLM调度引擎:
             method="POST",
         )
 
-        resp = urllib.request.urlopen(req, timeout=60)
+        resp = urllib.request.urlopen(req, timeout=LLM_TIMEOUT)
         result = json.loads(resp.read().decode())
 
         content = result["choices"][0]["message"]["content"]

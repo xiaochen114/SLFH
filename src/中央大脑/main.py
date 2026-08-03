@@ -25,16 +25,17 @@ class 中央大脑:
         self.事件总线 = 事件总线()
         self.registry = 机器人注册中心(self.事件总线)
         self.comm = 通信管理器(self.registry)
+        self.db = 数据库()
         # 从配置读取 LLM 参数
         cfg = 配置 or {}
         self.llm = LLM调度引擎(
             api_url=cfg.get("llm_api_url"),
             api_key=cfg.get("llm_api_key"),
             api_model=cfg.get("llm_api_model"),
+            数据库=self.db,
         )
         self.scheduler = 任务规划器()
         self.ops_agent = 运维Agent(self.registry)
-        self.db = 数据库()
         self.告警 = 监控告警(self.事件总线, self.db)
         self._running = False
 
@@ -58,7 +59,7 @@ class 中央大脑:
 
         self.web = Web面板(
             self.registry, self.comm, self.db, self.告警, self.事件总线,
-            web_host, web_port, patrol=self.patrol,
+            web_host, web_port, patrol=self.patrol, llm=self.llm,
         )
 
     def 启动(self):

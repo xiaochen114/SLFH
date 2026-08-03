@@ -16,6 +16,8 @@
   .header .status-badge{margin-left:auto;display:flex;align-items:center;gap:8px}
   .header .status-badge .dot{width:6px;height:6px;border-radius:50%;background:#22c55e}
   .header .status-badge span{color:#9ca3af;font-size:12px}
+  .header .llm-badge{background:#fffbeb;color:#d97706;border:1px solid #fcd34d;
+                     padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600}
 
   .tabs{display:flex;padding:0 32px;background:#edeff2;border-bottom:1px solid #d4d7dd}
   .tab{padding:12px 24px;cursor:pointer;font-size:13px;color:#6b7280;
@@ -123,6 +125,7 @@
 <div class="header">
   <h1>中央大脑 <small>· 多机器人调度系统</small></h1>
   <div class="status-badge">
+    <span class="llm-badge" id="llmBadge" style="display:none">⚠ LLM 降级中</span>
     <span class="dot"></span>
     <span id="headerStatus">连接中...</span>
   </div>
@@ -385,6 +388,23 @@ async function loadHistory(type){
 
 loadDashboard();
 setInterval(()=>{const a=document.querySelector('.content.active');if(a&&a.id==='page_dashboard')loadDashboard();},3000);
+
+// ======================== LLM 状态轮询 ========================
+async function checkLLMStatus(){
+  try {
+    const r = await api('/llm/status');
+    const st = r.data || {};
+    const badge = $('llmBadge');
+    if(st.降级中 || st.mode === 'rule'){
+      badge.style.display = 'inline';
+      badge.textContent = '⚠ LLM 降级中' + (st.最后错误 ? ' · ' + (st.最后错误+'').slice(0,40) : '');
+    }else{
+      badge.style.display = 'none';
+    }
+  }catch(e){}
+}
+checkLLMStatus();
+setInterval(checkLLMStatus, 10000);
 </script>
 </body>
 </html>

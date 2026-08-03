@@ -250,6 +250,19 @@ class 数据库:
             conn.commit()
             conn.close()
 
+    def 读取配置(self, key, default=None):
+        """读取键值配置"""
+        with self._锁:
+            conn = self._连接()
+            row = conn.execute("SELECT value FROM system_config WHERE key=?", (key,)).fetchone()
+            conn.close()
+            if row:
+                try:
+                    return json.loads(row["value"])
+                except:
+                    return row["value"]
+            return default
+
     def 获取统计(self):
         """系统概览统计"""
         with self._锁:

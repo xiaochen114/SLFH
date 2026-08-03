@@ -29,11 +29,12 @@ def fail(code=400, message="error", data=None):
 class Web面板:
     """中央大脑 HTTP API v1 + SSE 实时推送"""
 
-    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None):
+    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None, llm=None):
         self._registry = registry
         self._comm = comm
         self._db = db
         self._告警 = 告警
+        self._llm = llm
         self._event_bus = event_bus or 事件总线()
         self._host = host
         self._port = port
@@ -92,6 +93,9 @@ class Web面板:
                        self._patrol_stop, methods=["POST"])
         a.add_url_rule("/api/v1/patrol/status", "patrol_status", self._patrol_status)
 
+        # API v1 - LLM 状态
+        a.add_url_rule("/api/v1/llm/status", "llm_status", self._llm_status)
+
         # 兼容旧版 API
         a.add_url_rule("/api/status", "old_status", self._api_status)
 
@@ -107,6 +111,15 @@ class Web面板:
 
     def _api_health(self):
         return ok({"status": "running", "time": time.time()})
+
+    def _llm_status(self):
+        """LLM 连接状态（是否降级）"""
+        if self._llm:
+            return ok(self._llm.获取状态())
+        # 无 LLM 引擎时从数据库读上次状态
+        if self._db:
+            return ok(self._db.读取配置("llm_status", {"mode": "unknown"}))
+        return ok({"mode": "unknown"})
 
     def _api_status(self):
         return ok(self._registry.导出全景())
