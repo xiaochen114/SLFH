@@ -112,17 +112,39 @@ class 运维自愈:
             结果 = self._执行命令(ssh_cfg, 命令)
             self._记录("验证_" + 检查["名称"], {"robot": robot_id, "结果": str(结果)[:200]})
 
+    自愈提示词 = """你是运维诊断专家。根据设备诊断日志判断根因，给出修复命令。
+输出 JSON 数组，元素: {"type":"custom","params":{"command":"修复命令"},"priority":1}
+命令必须具体可执行，如重启服务、清理缓存、重新加载配置等。
+禁止破坏性操作（如格式化、删除系统文件、重启设备）。
+无法判断时返回空数组 []"""
+
     def _LLM诊断(self, 设备类型, 诊断日志):
-        if not self._llm or not hasattr(self._llm, "可用") or not self._llm.可用:
+        """规则无结论时，让 LLM 分析根因并返回修复动作"""
+        if not self._llm:
+            return None
+        # LLM 正在降级 → 跳过
+        if hasattr(self._llm, "_降级中") and self._llm._降级中:
             return None
         try:
             prompt = (
                 "设备类型: " + 设备类型 + "\n"
-                "诊断日志: " + json.dumps(诊断日志, ensure_ascii=False) + "\n"
-                "请分析根因，返回修复命令。只返回 JSON: " + '{"动作": "修复命令", "级别": "低危或高危"}'
+                "诊断日志: " + json.dumps(诊断日志, ensure_ascii=False)
             )
-            结果 = self._llm._llm决策({"robots": [], "events": [{"type": "诊断", "label": "自愈", "data": 诊断日志}]})
+            结果 = self._llm._llm决策(
+                {
+                    "robots": [],
+                    "events": [{"type": "诊断", "label": "自愈", "data": {"提示": prompt}}],
+                },
+                system=self.自愈提示词,
+            )
             self._记录("LLM诊断", {"设备": 设备类型, "结论": str(结果)[:200]})
+            # _llm决策 返回 RobotOrder 列表，提取 custom 指令的 command
+            if 结果:
+                for o in 结果:
+                    命令 = o.params.get("command", "")
+                    if 命令:
+                        print(f"[自愈] LLM建议修复: {命令}")
+                        return {"动作": 命令, "级别": "低危"}
             return None
         except Exception as e:
             print(f"[自愈] LLM诊断失败: {e}")

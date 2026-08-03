@@ -134,8 +134,8 @@ class LLM调度引擎:
 
     # ======================== LLM 决策 ========================
 
-    def _llm决策(self, context: dict) -> list:
-        """调用 DeepSeek API 生成调度指令"""
+    def _llm决策(self, context: dict, system=None) -> list:
+        """调用 DeepSeek API 生成调度指令。system 可传自定义系统提示词"""
         # 构建上下文
         robots = context.get("robots", [])
         events = context.get("events", [])
@@ -163,7 +163,7 @@ class LLM调度引擎:
         body = json.dumps({
             "model": self._api_model,
             "messages": [
-                {"role": "system", "content": 系统提示词},
+                {"role": "system", "content": system or 系统提示词},
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0,
