@@ -1,51 +1,57 @@
-# 森林防火巡逻系统
+# 森林防火巡逻系统 · 异构多机器人中央调度
 
-YOLO 火情检测 + 绝影Lite3 机器狗控制 + 中央大脑调度
+YOLO 火情检测 + 绝影Lite3 机器狗控制 + 中央大脑智能调度 + 运维自愈
+
+> 一套"中央大脑 + 异构机器人统一接口"架构，以森林防火为落地场景。
+> 未来可扩展至安防、搜救、农业等多机器人协同。
+
+---
 
 ## 项目结构
 
 ```
 E:\zy\
-├── 主控.py                  # 入口（自动跳转 src/）
+├── 主控.py                  # 唯一入口（真机/模拟）
 │
 ├── src/                     # 核心源码
-│   ├── main.py              # 巡逻系统主入口（YOLO + 机器狗 + Web）
-│   ├── 配置.yaml            # 系统配置源
+│   ├── 配置.yaml            # 系统配置源（含内网LLM参数）
 │   ├── 巡逻点.yaml           # 巡逻点位配置（可持久化）
 │   ├── requirements.txt     # Python 依赖
 │   │
 │   ├── 配置/                 # 配置与基础模块
 │   │   ├── 配置加载.py        # YAML 配置加载
-│   │   └── 日志系统.py        # 统一日志（控制台 + 文件，WARNING+）
+│   │   └── 日志系统.py        # 统一日志（控制台 + 文件）
 │   │
 │   ├── 检测/                 # 火情检测模块
 │   │   └── 火情检测.py        # YOLO 实时检测（火焰/烟雾/烟头）
 │   │
-│   ├── 机器人/               # 机器狗控制
-│   │   ├── robot_base.py     # 机器人抽象基类 + 数据类型定义
+│   ├── 机器人/               # 机器人控制层
+│   │   ├── robot_base.py     # RobotBase 抽象基类 + 数据类型
 │   │   ├── 机器狗控制.py      # 绝影Lite3 UDP 通讯封装
 │   │   ├── 机器狗_绝影.py     # RobotBase 适配实现
-│   │   ├── 感知主机控制.py    # SSH 操控感知主机 ROS2 导航
+│   │   ├── 感知主机控制.py    # SSH 操控感知主机 ROS2
 │   │   └── 机器人模拟器.py    # 模拟机器人（测试用）
 │   │
 │   ├── 中央大脑/              # 多机器人调度系统（核心）
 │   │   ├── main.py           # 中央大脑入口，组装所有模块
 │   │   ├── 事件总线.py        # 发布/订阅 + SSE 实时推送
-│   │   ├── 数据库.py          # SQLite 持久化（状态快照/任务日志）
+│   │   ├── 数据库.py          # SQLite 持久化（状态/任务/事件）
 │   │   ├── 监控告警.py        # 异常检测（低电量/断连/健康）
+│   │   ├── 检测服务.py        # YOLO 检测服务（事件入数据库）
+│   │   ├── 运维自愈.py        # 自愈框架（诊断器+高危闸门+LLM增强）
+│   │   ├── 诊断脚本_感知主机.py # 感知主机诊断器
+│   │   ├── 诊断脚本_绝影.py    # 绝影诊断器
+│   │   ├── 自主巡逻.py        # 巡逻调度器
 │   │   ├── 巡逻数据类型.py    # 巡逻点/状态 data class
-│   │   ├── 自主巡逻.py        # 巡逻调度器（点管理 + 导航控制）
 │   │   ├── brain_registry.py # 机器人注册中心
 │   │   ├── brain_comm.py     # 通信管理器（路由/缓存/重连）
-│   │   ├── brain_llm.py      # LLM 调度引擎（DeepSeek API + 规则降级）
+│   │   ├── brain_llm.py      # LLM 调度引擎（API + 规则降级 + 自动重连）
 │   │   ├── brain_scheduler.py# 任务规划器
-│   │   ├── brain_ops_agent.py# 运维诊断
-│   │   └── brain_web.py      # RESTful API v1 + SSE + 巡逻接口
+│   │   └── brain_web.py      # RESTful API v1 + SSE
 │   │
 │   ├── 面板/                 # 可视化界面
 │   │   ├── web服务器.py       # Flask Web 服务器
-│   │   ├── web_dashboard.html# 管理面板（总览/机器人/巡逻/日志）
-│   │   └── 桌面端.py          # Tkinter 桌面控制端
+│   │   └── web_dashboard.html# 管理面板
 │   │
 │   ├── 脚本/                 # 训练与工具
 │   │   ├── train.py          # 火情检测模型训练
@@ -53,23 +59,13 @@ E:\zy\
 │   │
 │   ├── models/               # YOLO 模型权重
 │   ├── runs/                 # 训练产出
-│   └── data/                 # 运行时数据
-│       ├── logs/             # 日志文件（系统_YYYYMMDD.log）
-│       └── *.json            # 敏感数据（已 gitignore）
+│   └── data/                 # 运行时数据（SQLite/日志）
 │
-├── 文档/                     # 项目文档
-│   ├── 系统架构设计.md
-│   ├── 项目路线图.md
-│   ├── 智能体实现计划.md
-│   └── *.pdf                 # 绝影Lite3 官方开发手册
-│
-├── 资源/                     # 静态资源
-├── 归档/                     # 旧版代码
-├── 第三方/                   # 外部工具包
-├── 训练集/                   # 数据集
-├── .gitignore
+├── docs/ 文档/ 归档/ 旧版/ 第三方/ 训练集/
 └── README.md
 ```
+
+---
 
 ## 快速开始
 
@@ -80,17 +76,19 @@ pip install -r src/requirements.txt
 ## 运行
 
 ```bash
-# 森林防火巡逻系统（真机）
+# 真机模式（注册绝影Lite3）
 python 主控.py
 
-# 模拟模式
+# 模拟模式（不连真狗）
 python 主控.py --simulate
 
-# 中央大脑（多机器人调度）
-python src/中央大脑/main.py
+# 带自主巡逻（需感知主机在线）
+python 主控.py --patrol
 ```
 
 打开 http://localhost:5000 查看管理面板。
+
+---
 
 ## 中央大脑 API
 
@@ -107,16 +105,25 @@ python src/中央大脑/main.py
 | `GET /api/v1/alerts` | 告警列表 |
 | `GET /api/v1/history/tasks` | 任务日志 |
 | `GET /api/v1/history/robots` | 状态历史 |
+| `GET /api/v1/history/stats` | 系统统计 |
 | `POST/GET /api/v1/patrol/points` | 巡逻点管理 |
 | `POST /api/v1/patrol/start` | 开始巡逻 |
 | `POST /api/v1/patrol/stop` | 停止巡逻 |
+| `GET /api/v1/llm/status` | LLM 连接状态 |
+| `GET /api/v1/selfheal/status` | 自愈系统状态 |
+| `GET /api/v1/selfheal/pending` | 待确认高危操作 |
+| `POST /api/v1/selfheal/confirm` | 确认/拒绝高危操作 |
+| `GET /api/v1/selfheal/history` | 自愈历史 |
 
-## 技术栈
+---
 
-- **检测**: YOLOv8 (Ultralytics)
-- **机器狗**: 云深处绝影Lite3 (UDP 协议)
-- **后端**: Python + Flask + SQLite
-- **实时推送**: SSE (Server-Sent Events)
-- **前端**: 纯 HTML/CSS/JS 单页应用
-- **LLM**: DeepSeek API（自动降级规则引擎）
-- **训练**: PyTorch + CUDA
+## 智能调度
+
+中央大脑的调度闭环：
+
+```
+监控告警/检测服务 → 事件入库（带标签）
+    ↓
+调度循环(2s) → 取未消费事件
+    ↓
+特急事件(火焰) → 硬编码急停所有机器人（不过LLM

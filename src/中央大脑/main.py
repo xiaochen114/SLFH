@@ -8,11 +8,11 @@ from 中央大脑.brain_comm import 通信管理器
 from 中央大脑.brain_web import Web面板
 from 中央大脑.brain_llm import LLM调度引擎
 from 中央大脑.brain_scheduler import 任务规划器
-from 中央大脑.brain_ops_agent import 运维Agent
 from 中央大脑.事件总线 import 事件总线
 from 中央大脑.数据库 import 数据库
 from 中央大脑.监控告警 import 监控告警
 from 中央大脑.检测服务 import 检测服务
+from 中央大脑.运维自愈 import 运维自愈
 from 中央大脑.自主巡逻 import 自主巡逻
 from 机器人.感知主机控制 import 感知主机控制
 from 机器人.robot_base import RobotOrder
@@ -26,7 +26,6 @@ class 中央大脑:
         self.registry = 机器人注册中心(self.事件总线)
         self.comm = 通信管理器(self.registry)
         self.db = 数据库()
-        # 从配置读取 LLM 参数
         cfg = 配置 or {}
         self.llm = LLM调度引擎(
             api_url=cfg.get("llm_api_url"),
@@ -35,9 +34,17 @@ class 中央大脑:
             数据库=self.db,
         )
         self.scheduler = 任务规划器()
-        self.ops_agent = 运维Agent(self.registry)
         self.告警 = 监控告警(self.事件总线, self.db)
         self._running = False
+
+        # 运维自愈（规则诊断优先，LLM增强）
+        self.自愈 = 运维自愈(
+            self.事件总线, self.db, llm=self.llm, 注册中心=self.registry,
+        )
+        from 中央大脑.诊断脚本_感知主机 import 获取诊断器 as 感知主机诊断器
+        from 中央大脑.诊断脚本_绝影 import 获取诊断器 as 绝影诊断器
+        self.自愈.注册诊断器("感知主机", 感知主机诊断器())
+        self.自愈.注册诊断器("绝影", 绝影诊断器())
 
         # 巡逻模块（点管理始终可用）
         self.patrol = 自主巡逻(None)
@@ -60,6 +67,7 @@ class 中央大脑:
         self.web = Web面板(
             self.registry, self.comm, self.db, self.告警, self.事件总线,
             web_host, web_port, patrol=self.patrol, llm=self.llm,
+            自愈=self.自愈,
         )
 
     def 启动(self):
@@ -73,14 +81,12 @@ class 中央大脑:
             else:
                 print("[中央大脑] 感知主机连接失败，巡逻不可用")
 
-        # 启动 YOLO 火情检测
         if self.检测:
             self.检测.启动()
 
-        # 启动 Web（后台线程）
         t = threading.Thread(target=self.web.启动, daemon=True)
         t.start()
-        time.sleep(0.5)  # 等 web 起来
+        time.sleep(0.5)
 
         self._running = True
         print("[中央大脑] 启动完成")
@@ -105,13 +111,11 @@ class 中央大脑:
                 time.sleep(2)
                 tick += 1
 
-                # 心跳 & 数据库记录
                 for r in self.registry.获取所有机器人():
                     if r.is_connected():
                         self.registry.心跳(r.robot_id)
                         try:
                             st = r.get_status()
-                            # 持久化状态快照（每 30s）
                             if tick % 15 == 0:
                                 self.db.保存状态快照(
                                     robot_id=r.robot_id,
@@ -132,12 +136,11 @@ class 中央大脑:
                         except:
                             pass
 
-                # LLM 决策（从事件库取未消费的检测事件，紧急优先，取走即消费）
+                # LLM 决策（从事件库取未消费的检测事件）
                 events = self.db.取未消费事件(source="yolo", limit=10)
-                # 特急事件 → 立刻急停所有在线机器人
                 for ev in events:
                     if ev.get("priority", 0) >= 2:
-                        print(f"[中央大脑] ⚠ 特急事件: {ev.get('label','')} 紧急急停所有机器人")
+                        print(f"[中央大脑] 特急事件: {ev.get('label','')} 紧急急停所有机器人")
                         for r in self.registry.获取所有机器人():
                             if r.is_connected():
                                 order = RobotOrder(
@@ -155,7 +158,6 @@ class 中央大脑:
                         for r in self.registry.获取所有机器人():
                             if r.is_connected():
                                 ok = self.comm.发送指令(r.robot_id, o)
-                                # 持久化任务日志
                                 self.db.记录任务(
                                     order_id=o.order_id,
                                     robot_id=r.robot_id,
@@ -173,7 +175,6 @@ class 中央大脑:
                                 })
                                 break
 
-                # 健康广播 & 清理旧数据（每 30s）
                 if tick % 15 == 0:
                     self.事件总线.发布("system_health", {
                         "robot_count": self.registry.获取数量(),
@@ -203,7 +204,6 @@ def main():
     parser.add_argument("--port", type=int, default=5000, help="Web端口")
     args = parser.parse_args()
 
-    # 加载配置
     from 配置.配置加载 import 加载配置
     cfg = 加载配置()
 

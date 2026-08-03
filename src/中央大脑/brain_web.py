@@ -29,12 +29,13 @@ def fail(code=400, message="error", data=None):
 class Web面板:
     """中央大脑 HTTP API v1 + SSE 实时推送"""
 
-    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None, llm=None):
+    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None, llm=None, 自愈=None):
         self._registry = registry
         self._comm = comm
         self._db = db
         self._告警 = 告警
         self._llm = llm
+        self._自愈 = 自愈
         self._event_bus = event_bus or 事件总线()
         self._host = host
         self._port = port
@@ -96,6 +97,12 @@ class Web面板:
         # API v1 - LLM 状态
         a.add_url_rule("/api/v1/llm/status", "llm_status", self._llm_status)
 
+        # API v1 - 自愈
+        a.add_url_rule("/api/v1/selfheal/status", "selfheal_status", self._selfheal_status)
+        a.add_url_rule("/api/v1/selfheal/pending", "selfheal_pending", self._selfheal_pending)
+        a.add_url_rule("/api/v1/selfheal/confirm", "selfheal_confirm", self._selfheal_confirm, methods=["POST"])
+        a.add_url_rule("/api/v1/selfheal/history", "selfheal_history", self._selfheal_history)
+
         # 兼容旧版 API
         a.add_url_rule("/api/status", "old_status", self._api_status)
 
@@ -120,6 +127,39 @@ class Web面板:
         if self._db:
             return ok(self._db.读取配置("llm_status", {"mode": "unknown"}))
         return ok({"mode": "unknown"})
+
+    # ======================== API v1: 自愈 ========================
+
+    def _selfheal_status(self):
+        """自愈系统状态"""
+        if not self._自愈:
+            return ok({"诊断器": [], "待确认数": 0, "历史数": 0, "最近": []})
+        return ok(self._自愈.获取状态())
+
+    def _selfheal_pending(self):
+        """待确认的高危操作列表"""
+        if not self._自愈:
+            return ok([])
+        return ok(self._自愈.获取待确认())
+
+    def _selfheal_confirm(self):
+        """人工确认/拒绝高危操作"""
+        if not self._自愈:
+            return fail(400, "自愈模块未启用")
+        d = request.get_json(silent=True) or {}
+        index = d.get("index", -1)
+        action = d.get("action", "approve")
+        result = self._自愈.处理待确认(index, action)
+        if result.get("ok"):
+            return ok(result, f"高危操作{action}")
+        return fail(400, result.get("msg", "操作失败"))
+
+    def _selfheal_history(self):
+        """自愈历史"""
+        if not self._自愈:
+            return ok([])
+        limit = int(request.args.get("limit", 50))
+        return ok(self._自愈.获取历史(limit))
 
     def _api_status(self):
         return ok(self._registry.导出全景())
