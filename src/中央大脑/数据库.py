@@ -127,6 +127,17 @@ class 数据库:
                     created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
                 );
                 CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_orders(status);
+
+                CREATE TABLE IF NOT EXISTS patrol_point (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT,
+                    x REAL NOT NULL,
+                    y REAL NOT NULL,
+                    yaw REAL DEFAULT 0,
+                    sort INTEGER DEFAULT 0,
+                    created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_patrol_point_sort ON patrol_point(sort);
             """)
             conn.commit()
             conn.close()
@@ -442,3 +453,29 @@ class 数据库:
                 conn.execute("UPDATE pending_orders SET status=? WHERE id=?", (status, pid))
             conn.commit()
             conn.close()
+
+    # ---- 巡逻点持久化 ----
+
+    def 保存巡逻点(self, points):
+        """全量覆盖保存巡逻点列表到数据库"""
+        with self._锁:
+            conn = self._连接()
+            conn.execute("DELETE FROM patrol_point")
+            for i, p in enumerate(points):
+                conn.execute(
+                    "INSERT INTO patrol_point(name, x, y, yaw, sort) VALUES (?,?,?,?,?)",
+                    (p.get("name", f"点{i+1}"), p["x"], p["y"], p.get("yaw", 0), i),
+                )
+            conn.commit()
+            conn.close()
+
+    def 加载巡逻点(self):
+        """读取全部巡逻点（按 sort 排序）"""
+        with self._锁:
+            conn = self._连接()
+            rows = conn.execute(
+                "SELECT * FROM patrol_point ORDER BY sort ASC"
+            ).fetchall()
+            conn.close()
+            return [{"index": i, "name": r["name"], "x": r["x"], "y": r["y"], "yaw": r["yaw"]}
+                    for i, r in enumerate(rows)]

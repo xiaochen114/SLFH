@@ -48,9 +48,9 @@ class 中央大脑:
         self.自愈.注册诊断器("感知主机", 感知主机诊断器())
         self.自愈.注册诊断器("绝影", 绝影诊断器())
 
-        # 巡逻模块（点管理始终可用）
+        # 巡逻模块（点管理始终可用，持久化到数据库）
         self.patrol = 自主巡逻(None)
-        self.patrol.加载配置()
+        self.patrol.set_db(self.db)  # 从数据库加载巡逻点
         self.感知主机 = None
         if 启用巡逻:
             self.感知主机 = 感知主机控制()
@@ -153,6 +153,7 @@ class 中央大脑:
                 ctx = {
                     "robots": self.registry.导出全景().get("robots", []),
                     "events": events,
+                    "patrol_points": self.patrol.获取点列表() if self.patrol else [],
                 }
                 import time as _t
                 _start = _t.time()

@@ -2,4 +2,8 @@ dwell_time: 5
 mode: loop
 nav_timeout: 120
 obstacle_policy: skip
-patrol_points: []
+patrol_points:
+- name: 瞭望塔
+  x: 10
+  y: 20
+  yaw: 0

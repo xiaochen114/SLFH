@@ -164,8 +164,15 @@ class Web面板:
 
         # 1. 记录操作员消息
         self._db.记录对话("operator", content)
-        # 2. 构建带记忆的上下文
+        # 2. 构建带记忆的上下文 + 当前机器人/巡逻点信息
         prompt = self._记忆.构建上下文(content) if self._记忆 else content
+        机器人信息 = self._registry.导出全景().get("robots", [])
+        巡逻点信息 = self._patrol.获取点列表() if self._patrol else []
+        if 机器人信息 or 巡逻点信息:
+            prompt += "\n\n## 当前可操作的机器人\n" + \
+                "\n".join(f"- {r.get('id','?')} ({r.get('type','?')}) 电量{r.get('battery',0)*100:.0f}% 模式{r.get('mode','?')}" for r in 机器人信息) + \
+                "\n\n## 可用巡逻点\n" + \
+                "\n".join(f"- {p.get('name','点'+str(p.get('index',0)+1))}: ({p.get('x','?')}, {p.get('y','?')})" for p in 巡逻点信息) if (机器人信息 or 巡逻点信息) else ""
         # 3. 调 LLM（半自动：返回自然语言回复 + 可选指令，不直接下发）
         结果 = self._llm.对话(prompt)
         if 结果.get("error"):

@@ -14,6 +14,7 @@ class 自主巡逻:
 
     def __init__(self, 感知主机):
         self._ph = 感知主机
+        self._db = None
         self._points: list[巡逻点] = []
         self._stop = False
         self._thread = None
@@ -24,6 +25,18 @@ class 自主巡逻:
         self.导航超时 = 120
         self.遇障策略 = "skip"   # skip / retry
         self.循环模式 = "loop"   # loop / once
+
+    def set_db(self, db):
+        """绑定数据库（巡逻点持久化到 SQLite）"""
+        self._db = db
+        # 优先从数据库加载
+        if db:
+            点列表 = db.加载巡逻点()
+            if 点列表:
+                self._points = [巡逻点(x=p["x"], y=p["y"], yaw=p.get("yaw", 0), name=p.get("name", f"点{i+1}"))
+                                for i, p in enumerate(点列表)]
+                self.状态.总点数 = len(self._points)
+                self._log(f"从数据库加载 {len(self._points)} 个巡逻点")
 
     # ========== 配置读写 ==========
 
@@ -49,6 +62,13 @@ class 自主巡逻:
             self._log(f"加载 {len(self._points)} 个巡逻点")
 
     def 保存配置(self, path="巡逻点.yaml"):
+        # 同步到数据库（唯一持久化真源）
+        if self._db:
+            self._db.保存巡逻点([
+                {"x": p.x, "y": p.y, "yaw": p.yaw, "name": p.name}
+                for p in self._points
+            ])
+        # 兼容旧版 yaml（保留，后续可删）
         cfg = {
             "patrol_points": [
                 {"x": p.x, "y": p.y, "yaw": p.yaw, "name": p.name}

@@ -22,18 +22,21 @@ LLM_TIMEOUT = 8          # 单次请求超时(秒)，防止调度循环卡死
 - drone: 空中侦察/通信中继 (移动速度快，续航短)
 
 ## 指令类型
-- patrol: 开始巡逻
+- patrol: 开始巡逻 {point: 巡逻点名}（目标点从"可用巡逻点"中选择）
 - stop: 停止当前动作
 - alert: 急停/警戒
 - return: 返回/回零
 - inspect: 检查指定位置 {target: [x, y]}
 - custom: 自定义指令 {command: "xxx"}
 
+## 可用巡逻点
+上下文中会提供"可用巡逻点"列表（名称+坐标）。需要派机器人去某个位置时，优先用巡逻点里的坐标。若列表为空则不可巡逻。
+
 ## 决策规则
 1. 低电量(<20%) → return
 2. 发现火情(fire_detected) 且附近有机器人 → alert + inspect
 3. 通信断连(comm_level≥2) → 派 drone 中继
-4. 空闲机器人(idle) → patrol
+4. 空闲机器人(idle) → patrol（选一个巡逻点作为目标）
 
 ## 输出格式
 返回 JSON 数组，每个元素: {"type":"指令类型","robot_id":"机器人ID","params":{},"priority":0-3}
@@ -139,6 +142,7 @@ class LLM调度引擎:
         # 构建上下文
         robots = context.get("robots", [])
         events = context.get("events", [])
+        patrol_points = context.get("patrol_points", [])
 
         robot_lines = []
         for r in robots:
@@ -151,11 +155,21 @@ class LLM调度引擎:
 
         event_lines = [f"- {e.get('type','?')}: {json.dumps(e, ensure_ascii=False)}" for e in events]
 
+        # 巡逻点列表
+        point_lines = []
+        for p in patrol_points:
+            point_lines.append(
+                f"- {p.get('name','点'+str(p.get('index',0)+1))}: 坐标({p.get('x','?')}, {p.get('y','?')}) 朝向{p.get('yaw',0)}"
+            )
+
         prompt = f"""## 当前机器人状态
 {chr(10).join(robot_lines) if robot_lines else "(无在线机器人)"}
 
 ## 当前事件
 {chr(10).join(event_lines) if event_lines else "(无事件)"}
+
+## 可用巡逻点
+{chr(10).join(point_lines) if point_lines else "(暂无巡逻点)"}
 
 请输出调度指令 JSON。"""
 
@@ -247,6 +261,7 @@ orders 仅在需要执行操作时填，不需要则空数组。回复要简洁�
         orders = []
         events = context.get("events", [])
         robots = context.get("robots", [])
+        patrol_points = context.get("patrol_points", [])
 
         for ev in events:
             etype = ev.get("type", "")
@@ -262,9 +277,15 @@ orders 仅在需要执行操作时填，不需要则空数组。回复要简洁�
                             priority=2, source="brain"))
                         break
             elif etype == "smoke_detected":
+                # 派机器人去最近的巡逻点巡查（有巡逻点则用坐标）
+                point = patrol_points[0] if patrol_points else None
+                params = {"speed": 10000}
+                if point:
+                    params["target"] = [point.get("x", 0), point.get("y", 0)]
+                    params["point"] = point.get("name", "")
                 orders.append(RobotOrder(
                     f"rule_{int(time.time())}_3", "patrol",
-                    {"speed": 10000}, priority=1, source="brain"))
+                    params, priority=1, source="brain"))
             elif etype == "communication_lost":
                 for r in robots:
                     if r.get("type") == "drone" and r.get("health") == "ok":
