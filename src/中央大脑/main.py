@@ -147,14 +147,17 @@ class 中央大脑:
 
                 # 取未消费的检测事件
                 events = self.db.取未消费事件(source="yolo", limit=10)
-                # 高危事件（priority>=2）→ 三件套兜底，不依赖 LLM
+                # 高危事件（priority>=2）→ 三件套兜底，不依赖 LLM，不再排队给 LLM
+                普通事件 = []
                 for ev in events:
                     if ev.get("priority", 0) >= 2:
                         self._高危处理(ev)
+                    else:
+                        普通事件.append(ev)
                 # 普通事件 → 排队给后台 LLM 决策线程
-                if events:
+                if 普通事件:
                     with self._决策锁:
-                        self._待决策事件.extend(events)
+                        self._待决策事件.extend(普通事件)
                     self._确保决策线程()
 
                 if tick % 15 == 0:

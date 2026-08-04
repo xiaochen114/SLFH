@@ -44,6 +44,7 @@ class 运维自愈:
         return list(self._诊断器.keys())
 
     def 处理事件(self, 事件):
+        """触发自愈诊断（后台线程，不阻塞事件发布）"""
         robot_id = 事件.get("data", {}).get("robot_id", "")
         symptom = 事件.get("data", {}).get("message", "")
         设备类型 = self._查设备类型(robot_id)
@@ -51,7 +52,11 @@ class 运维自愈:
             print(f"[自愈] 无诊断器: {robot_id}({设备类型})")
             return
         print(f"[自愈] 触发: {robot_id}({设备类型}) - {symptom}")
-        self._执行诊断链(设备类型, robot_id, symptom)
+        # 后台执行，SSH 诊断可能耗时，不阻塞主流程
+        threading.Thread(
+            target=self._执行诊断链, args=(设备类型, robot_id, symptom),
+            daemon=True,
+        ).start()
 
     def _查设备类型(self, robot_id):
         if self._注册中心:

@@ -86,7 +86,17 @@ class 监控告警:
         except:
             pass
 
-        # 2. 持久通道：异步写数据库，不阻塞即时广播
+        # 2. 触发自愈：健康/通信异常 → 发布 robot_issue（自愈按此诊断修复）
+        if alert.get("type") in ("health_issue", "poor_connection", "disconnected"):
+            try:
+                self._bus.发布("robot_issue", {
+                    "robot_id": alert.get("robot_id", ""),
+                    "message": alert.get("message", ""),
+                })
+            except:
+                pass
+
+        # 3. 持久通道：异步写数据库，不阻塞即时广播
         if self._db:
             threading.Thread(
                 target=self._持久化告警, args=(alert,), daemon=True
