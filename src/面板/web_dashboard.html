@@ -105,6 +105,11 @@
   .hist-switch .btn{background:#f0f2f5;color:#6b7280}
   .hist-switch .btn.active{background:#2563eb;color:#fff}
 
+  @keyframes fireBlink{
+    0%,100%{opacity:1}
+    50%{opacity:.4}
+  }
+
   @media(max-width:700px){
     .header{padding:0 16px}
     .header h1{font-size:13px}
@@ -442,8 +447,32 @@ evtSource.onmessage = function(e){
     if(ev.type==='alert') addAlert(ev.data);
     if(ev.type==='system_health') updateStats(ev.data);
     if(ev.type==='llm_decision'){ loadFlow(); loadLLMStats(); }
+    if(ev.type==='fire_alarm') fireAlarm(ev.data);
   } catch(ex) {}
 };
+
+// ======================== 火警报警（声光）=======================
+function fireAlarm(data){
+  // 全屏红色遮罩 + 闪烁
+  const mask = $('fireMask') || (function(){
+    const m = document.createElement('div');
+    m.id = 'fireMask';
+    m.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(220,38,38,.35);z-index:9999;pointer-events:none;display:flex;align-items:center;justify-content:center;animation:fireBlink 0.8s infinite;';
+    m.innerHTML = '<div style="background:#dc2626;color:#fff;padding:30px 50px;border-radius:12px;font-size:28px;font-weight:bold;text-align:center;box-shadow:0 0 40px rgba(220,38,38,.8)">🔥 火警报警<br><span style="font-size:16px">'+ (data.message||'') +'</span></div>';
+    document.body.appendChild(m);
+    // 声音
+    try {
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 800; g.gain.value = 0.3;
+      o.start(); setTimeout(()=>{o.stop();ctx.close();}, 3000);
+    } catch(ex){}
+    // 5秒后消失
+    setTimeout(()=>{ m.remove(); }, 5000);
+    return m;
+  })();
+}
 
 function addAlert(a){
   const key=(a.level||'')+'|'+(a.message||a.type||'');

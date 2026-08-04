@@ -39,6 +39,11 @@ class 中央大脑:
         self.记忆 = 记忆管理器(self.db)
         self._running = False
 
+        # LLM 决策后台线程（异步，避免阻塞调度循环）
+        self._决策线程 = None
+        self._待决策事件 = []   # 排队等 LLM 决策的普通事件
+        self._决策锁 = threading.Lock()
+
         # 运维自愈（规则诊断优先，LLM增强）
         self.自愈 = 运维自愈(
             self.事件总线, self.db, llm=self.llm, 注册中心=self.registry,
@@ -140,71 +145,25 @@ class 中央大脑:
                         except:
                             pass
 
-                # LLM 决策（从事件库取未消费的检测事件）
+                # 取未消费的检测事件
                 events = self.db.取未消费事件(source="yolo", limit=10)
+                # 高危事件（priority>=2）→ 三件套兜底，不依赖 LLM
                 for ev in events:
                     if ev.get("priority", 0) >= 2:
-                        print(f"[中央大脑] 特急事件: {ev.get('label','')} 紧急急停所有机器人")
-                        for r in self.registry.获取所有机器人():
-                            if r.is_connected():
-                                order = RobotOrder(
-                                    order_id=f"urgent_{int(time.time())}",
-                                    type="alert", params={"reason": "urgent_fire"},
-                                    priority=3, source="brain")
-                                self.comm.发送指令(r.robot_id, order)
-                ctx = {
-                    "robots": self.registry.导出全景().get("robots", []),
-                    "events": events,
-                    "patrol_points": self.patrol.获取点列表() if self.patrol else [],
-                }
-                import time as _t
-                _start = _t.time()
-                orders = self.llm.决策(ctx)
-                _latency = int((_t.time() - _start) * 1000)
-                # 记录 LLM 决策（记忆来源 + 审计）
-                llm状态 = self.llm.获取状态()
-                mode = "rule" if llm状态.get("降级中") or llm状态.get("mode") == "rule" else "llm"
-                order_list = [
-                    {"type": o.type, "robot_id": o.robot_id, "priority": o.priority}
-                    for o in orders
-                ]
-                self.db.记录LLM决策(mode, events, ctx["robots"], order_list, _latency)
-                self.事件总线.发布("llm_decision", {
-                    "mode": mode, "orders": order_list, "latency_ms": _latency,
-                })
-                if orders:
-                    for o in self.scheduler.规划(orders):
-                        # 无标签 → 按能力路由兜底
-                        if not o.robot_id:
-                            类型 = {"inspect": "drone"}.get(o.type, "dog")
-                            for r in self.registry.获取所有机器人():
-                                if r.is_connected():
-                                    try:
-                                        if r.get_status().robot_type == 类型:
-                                            o.robot_id = r.robot_id
-                                            break
-                                    except:
-                                        pass
-                        # 按指令标签找目标机器人下发
-                        if o.robot_id:
-                            r = self.registry.获取机器人(o.robot_id)
-                            if r and r.is_connected():
-                                ok = self.comm.发送指令(o.robot_id, o)
-                                self.db.记录任务(
-                                    order_id=o.order_id,
-                                    robot_id=o.robot_id,
-                                    type=o.type,
-                                    params=o.params,
-                                    priority=o.priority,
-                                    source=o.source,
-                                    success=ok,
-                                    message=f"指令 {o.type} {'成功' if ok else '失败'}",
-                                )
-                                self.事件总线.发布("brain_order", {
-                                    "robot_id": o.robot_id,
-                                    "type": o.type,
-                                    "priority": o.priority,
-                                })
+                        self._高危处理(ev)
+                # 普通事件 → 排队给后台 LLM 决策线程
+                if events:
+                    with self._决策锁:
+                        self._待决策事件.extend(events)
+                    self._确保决策线程()
+
+                if tick % 15 == 0:
+                    self.事件总线.发布("system_health", {
+                        "robot_count": self.registry.获取数量(),
+                        "online": len(self.registry.获取在线列表()),
+                        "uptime": tick * 2,
+                    })
+                    self.db.清理旧历史(keep_hours=72)
 
                 if tick % 15 == 0:
                     self.事件总线.发布("system_health", {
@@ -218,6 +177,111 @@ class 中央大脑:
             print("\n[中央大脑] 用户停止")
         finally:
             self.停止()
+
+    # ======================== 高危处理（三件套） ========================
+
+    def _高危处理(self, ev):
+        """火情等高危事件：三件套兜底，不依赖 LLM
+        1. 急停所有机器狗
+        2. 报火警（SSE + 事件总线广播，前端声光提示）
+        3. 记录事件（可追溯）"""
+        label = ev.get("label", "高危事件")
+        print(f"[中央大脑] ⚠ {label}！三件套处理")
+
+        # 1. 急停所有在线机器人
+        for r in self.registry.获取所有机器人():
+            if r.is_connected():
+                order = RobotOrder(
+                    order_id=f"urgent_{int(time.time())}",
+                    type="alert", params={"reason": "urgent_fire"},
+                    priority=3, source="brain")
+                self.comm.发送指令(r.robot_id, order)
+
+        # 2. 报火警（SSE 前端声光 + 事件总线广播）
+        self.事件总线.发布("fire_alarm", {
+            "level": "critical",
+            "message": f"火警！{label}，所有机器人急停",
+            "time": time.time(),
+            "event": ev,
+        })
+
+        # 3. 记录事件（数据库留档）
+        self.db.记录事件(
+            source="system",
+            type="fire_alarm",
+            label="火警",
+            level=3,
+            priority=2,
+            data={"action": "三件套", "source_event": label},
+        )
+
+    # ======================== LLM 后台决策线程 ========================
+
+    def _确保决策线程(self):
+        """确保后台决策线程在运行（只在有待决策事件时启动）"""
+        if self._决策线程 and self._决策线程.is_alive():
+            return
+        self._决策线程 = threading.Thread(target=self._决策循环, daemon=True)
+        self._决策线程.start()
+
+    def _决策循环(self):
+        """后台 LLM 决策：处理排队的普通事件，不阻塞调度循环"""
+        while self._running:
+            with self._决策锁:
+                events = list(self._待决策事件)
+                self._待决策事件.clear()
+            if not events:
+                time.sleep(0.5)
+                continue
+
+            ctx = {
+                "robots": self.registry.导出全景().get("robots", []),
+                "events": events,
+                "patrol_points": self.patrol.获取点列表() if self.patrol else [],
+            }
+            try:
+                orders = self.llm.决策(ctx)  # 阻塞但只在后台线程
+                self._下发指令(orders, ctx, events)
+            except Exception as e:
+                print(f"[中央大脑] 决策异常: {e}")
+
+    def _下发指令(self, orders, ctx, events):
+        """记录决策 + 按标签路由下发指令"""
+        if not orders:
+            return
+        llm状态 = self.llm.获取状态()
+        mode = "rule" if llm状态.get("降级中") or llm状态.get("mode") == "rule" else "llm"
+        order_list = [{"type": o.type, "robot_id": o.robot_id, "priority": o.priority}
+                      for o in orders]
+        self.db.记录LLM决策(mode, events, ctx["robots"], order_list, 0)
+        self.事件总线.发布("llm_decision", {
+            "mode": mode, "orders": order_list, "latency_ms": 0,
+        })
+        for o in self.scheduler.规划(orders):
+            # 无标签 → 按能力路由兜底
+            if not o.robot_id:
+                类型 = {"inspect": "drone"}.get(o.type, "dog")
+                for r in self.registry.获取所有机器人():
+                    if r.is_connected():
+                        try:
+                            if r.get_status().robot_type == 类型:
+                                o.robot_id = r.robot_id
+                                break
+                        except:
+                            pass
+            if o.robot_id:
+                r = self.registry.获取机器人(o.robot_id)
+                if r and r.is_connected():
+                    ok = self.comm.发送指令(o.robot_id, o)
+                    self.db.记录任务(
+                        order_id=o.order_id, robot_id=o.robot_id,
+                        type=o.type, params=o.params, priority=o.priority,
+                        source=o.source, success=ok,
+                        message=f"指令 {o.type} {'成功' if ok else '失败'}",
+                    )
+                    self.事件总线.发布("brain_order", {
+                        "robot_id": o.robot_id, "type": o.type, "priority": o.priority,
+                    })
 
     def 注册机器人(self, robot):
         """先连接成功再注册（避免注册了连不上的机器人）"""
