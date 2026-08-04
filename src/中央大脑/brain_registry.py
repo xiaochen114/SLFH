@@ -67,6 +67,8 @@ class 机器人注册中心:
                 print(f"[注册中心] {robot_id} 已注销")
 
     def 获取机器人(self, robot_id: str) -> Optional[RobotBase]:
+        if not isinstance(robot_id, str):
+            return None  # 非法 robot_id，防御
         return self._robots.get(robot_id)
 
     def 获取所有机器人(self) -> list:

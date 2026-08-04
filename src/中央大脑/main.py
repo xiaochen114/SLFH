@@ -174,7 +174,18 @@ class 中央大脑:
                 })
                 if orders:
                     for o in self.scheduler.规划(orders):
-                        # 按指令标签找目标机器人，无标签则跳过（不再发给"第一个"）
+                        # 无标签 → 按能力路由兜底
+                        if not o.robot_id:
+                            类型 = {"inspect": "drone"}.get(o.type, "dog")
+                            for r in self.registry.获取所有机器人():
+                                if r.is_connected():
+                                    try:
+                                        if r.get_status().robot_type == 类型:
+                                            o.robot_id = r.robot_id
+                                            break
+                                    except:
+                                        pass
+                        # 按指令标签找目标机器人下发
                         if o.robot_id:
                             r = self.registry.获取机器人(o.robot_id)
                             if r and r.is_connected():
@@ -209,12 +220,13 @@ class 中央大脑:
             self.停止()
 
     def 注册机器人(self, robot):
-        self.registry.注册(robot)
+        """先连接成功再注册（避免注册了连不上的机器人）"""
         if robot.connect():
+            self.registry.注册(robot)
             print(f"[中央大脑] {robot.robot_id} 连接成功")
             self.事件总线.发布("robot_registered", {"robot_id": robot.robot_id})
         else:
-            print(f"[中央大脑] {robot.robot_id} 连接失败")
+            print(f"[中央大脑] 机器人连接失败，未注册")
 
 
 def main():
