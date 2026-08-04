@@ -89,6 +89,18 @@ class 数据库:
                 CREATE INDEX IF NOT EXISTS idx_events_priority ON events(priority);
                 CREATE INDEX IF NOT EXISTS idx_events_time ON events(created_at);
 
+                CREATE TABLE IF NOT EXISTS alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT NOT NULL,
+                    level TEXT NOT NULL,             -- error / warning / info
+                    robot_id TEXT,
+                    message TEXT,
+                    data_json TEXT,
+                    created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_alerts_time ON alerts(created_at);
+                CREATE INDEX IF NOT EXISTS idx_alerts_level ON alerts(level);
+
                 CREATE TABLE IF NOT EXISTS llm_decision (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     mode TEXT DEFAULT 'llm',        -- llm / rule
@@ -479,3 +491,42 @@ class 数据库:
             conn.close()
             return [{"index": i, "name": r["name"], "x": r["x"], "y": r["y"], "yaw": r["yaw"]}
                     for i, r in enumerate(rows)]
+
+    # ---- 告警持久化 ----
+
+    def 保存告警(self, type, level, robot_id=None, message="", data=None):
+        """告警写入独立表（不再塞 system_config）"""
+        with self._锁:
+            conn = self._连接()
+            conn.execute(
+                "INSERT INTO alerts(type, level, robot_id, message, data_json) VALUES (?,?,?,?,?)",
+                (type, level, robot_id, message,
+                 json.dumps(data or {}, ensure_ascii=False)),
+            )
+            conn.commit()
+            conn.close()
+
+    def 查询告警(self, limit=50, level=None):
+        """查询告警历史（数据库持久化）"""
+        with self._锁:
+            conn = self._连接()
+            if level:
+                rows = conn.execute(
+                    "SELECT * FROM alerts WHERE level=? ORDER BY id DESC LIMIT ?",
+                    (level, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM alerts ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            conn.close()
+            result = []
+            for r in rows:
+                d = dict(r)
+                try:
+                    d["data_json"] = json.loads(d.get("data_json", "{}") or "{}")
+                except:
+                    d["data_json"] = {}
+                result.append(d)
+            return result

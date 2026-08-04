@@ -84,10 +84,16 @@ class 监控告警:
         level_map = {"error": "✗", "warning": "!", "info": "i"}
         print(f"[告警][{level_map.get(alert['level'],'?')}] {alert['message']}")
 
-        # 持久化
+        # 持久化到独立告警表
         if self._db:
             try:
-                self._db.保存配置(f"alert_{int(alert['time'])}", alert)
+                self._db.保存告警(
+                    type=alert.get("type", "alert"),
+                    level=alert.get("level", "info"),
+                    robot_id=alert.get("robot_id"),
+                    message=alert.get("message", ""),
+                    data=alert,
+                )
             except:
                 pass
 
@@ -98,7 +104,9 @@ class 监控告警:
             pass
 
     def 获取告警(self, limit=50, level=None):
-        """获取最近的告警"""
+        """获取最近的告警（优先数据库，重启不丢）"""
+        if self._db:
+            return self._db.查询告警(limit, level)
         result = self._告警历史
         if level:
             result = [a for a in result if a.get("level") == level]

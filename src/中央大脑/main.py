@@ -25,7 +25,7 @@ class 中央大脑:
     def __init__(self, web_host="0.0.0.0", web_port=5000, 启用巡逻=False, 配置=None):
         self.事件总线 = 事件总线()
         self.registry = 机器人注册中心(self.事件总线)
-        self.comm = 通信管理器(self.registry)
+        self.comm = 通信管理器(self.registry, self.事件总线)
         self.db = 数据库()
         cfg = 配置 or {}
         self.llm = LLM调度引擎(
@@ -65,6 +65,8 @@ class 中央大脑:
                 摄像头=cfg.get("camera_url", 0),
                 置信度=cfg.get("conf_thresh", 0.5),
             )
+        else:
+            print("[检测] 未配置 model_path，YOLO 火情检测未启用")
 
         self.web = Web面板(
             self.registry, self.comm, self.db, self.告警, self.事件总线,
@@ -163,7 +165,7 @@ class 中央大脑:
                 llm状态 = self.llm.获取状态()
                 mode = "rule" if llm状态.get("降级中") or llm状态.get("mode") == "rule" else "llm"
                 order_list = [
-                    {"type": o.type, "robot_id": o.order_id, "priority": o.priority}
+                    {"type": o.type, "robot_id": o.robot_id, "priority": o.priority}
                     for o in orders
                 ]
                 self.db.记录LLM决策(mode, events, ctx["robots"], order_list, _latency)
@@ -172,12 +174,14 @@ class 中央大脑:
                 })
                 if orders:
                     for o in self.scheduler.规划(orders):
-                        for r in self.registry.获取所有机器人():
-                            if r.is_connected():
-                                ok = self.comm.发送指令(r.robot_id, o)
+                        # 按指令标签找目标机器人，无标签则跳过（不再发给"第一个"）
+                        if o.robot_id:
+                            r = self.registry.获取机器人(o.robot_id)
+                            if r and r.is_connected():
+                                ok = self.comm.发送指令(o.robot_id, o)
                                 self.db.记录任务(
                                     order_id=o.order_id,
-                                    robot_id=r.robot_id,
+                                    robot_id=o.robot_id,
                                     type=o.type,
                                     params=o.params,
                                     priority=o.priority,
@@ -186,11 +190,10 @@ class 中央大脑:
                                     message=f"指令 {o.type} {'成功' if ok else '失败'}",
                                 )
                                 self.事件总线.发布("brain_order", {
-                                    "robot_id": r.robot_id,
+                                    "robot_id": o.robot_id,
                                     "type": o.type,
                                     "priority": o.priority,
                                 })
-                                break
 
                 if tick % 15 == 0:
                     self.事件总线.发布("system_health", {
@@ -228,11 +231,12 @@ def main():
 
     if args.simulate:
         from 机器人.机器人模拟器 import 模拟机器人
-        brain.注册机器人(模拟机器人("模拟狗1"))
+        # robot_id 由系统分配，此处只传类型
+        brain.注册机器人(模拟机器人(robot_id="", robot_type="dog"))
         print("[系统] 模拟模式")
     else:
         from 机器人.机器狗_绝影 import 机器狗_绝影
-        brain.注册机器人(机器狗_绝影("绝影1号"))
+        brain.注册机器人(机器狗_绝影(robot_id=""))
         print("[系统] 真机模式")
 
     brain.启动()

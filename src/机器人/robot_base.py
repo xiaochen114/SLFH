@@ -15,6 +15,7 @@ class RobotOrder:
     """中央大脑下发给末端的任务指令"""
     order_id: str                          # 指令唯一ID
     type: str                              # patrol / inspect / alert / return / custom
+    robot_id: str = ""                     # 目标机器人（系统分配ID，收件人标签）
     params: dict = field(default_factory=dict)  # 参数 {target:[x,y], speed:1.0, ...}
     priority: int = 0                      # 0=低 1=中 2=高 3=紧急
     source: str = "brain"                  # 来源 brain / web / auto

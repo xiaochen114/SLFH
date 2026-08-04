@@ -184,8 +184,11 @@ class Web面板:
         if 指令列表:
             self._db.记录对话("llm", 回复文本, 指令列表)
             for 指令 in 指令列表:
-                if 指令.get("robot_id"):
-                    self._db.添加待确认(指令["robot_id"], 指令, source="llm")
+                rid = 指令.get("robot_id", "")
+                if isinstance(rid, dict):  # 防 LLM 返回嵌套结构
+                    rid = rid.get("id", "") or ""
+                if isinstance(rid, str) and rid:
+                    self._db.添加待确认(rid, 指令, source="llm")
             return ok({"reply": 回复文本, "orders": 指令列表, "pending": True})
         self._db.记录对话("llm", 回复文本, [])
         return ok({"reply": 回复文本, "orders": []})
@@ -199,7 +202,7 @@ class Web面板:
         return ok(self._db.查询待确认(20))
 
     def _orders_confirm(self):
-        """确认/拒绝/修改待确认指令"""
+        """确认/拒绝/修改待确认指令。confirm 时真正下发给机器人"""
         d = request.get_json(silent=True) or {}
         pid = d.get("id")
         action = d.get("action", "confirm")  # confirm / reject / modified
@@ -207,14 +210,42 @@ class Web面板:
             return fail(400, "缺少指令 id")
         if not self._db:
             return fail(400, "数据库未启用")
+
+        # 查这条待确认指令
+        目标 = None
+        for p in self._db.查询待确认(50):
+            if p["id"] == pid:
+                目标 = p
+                break
+        if not 目标:
+            return fail(404, "指令不存在或已处理")
+
+        from 机器人.robot_base import RobotOrder
+        order_data = 目标.get("order_json", {}) or {}
+        robot_id = 目标.get("robot_id", "")
+        if not isinstance(robot_id, str):
+            robot_id = str(robot_id) if robot_id else ""
+
+        if action == "reject":
+            self._db.处理待确认(pid, "rejected")
+            self._db.记录干预("待确认拒绝", robot_id=robot_id, order=order_data)
+            return ok(None, "已拒绝")
+
+        # confirm 或 modified → 构造指令并下发
         if action == "modified":
-            new_order = d.get("order", {})
-            self._db.处理待确认(pid, "modified", new_order)
-        else:
-            self._db.处理待确认(pid, "confirmed" if action == "confirm" else "rejected")
-        # 审计
-        self._db.记录干预(f"待确认_{action}", order={"id": pid})
-        return ok(None, f"指令已{action}")
+            order_data = d.get("order", order_data)
+        order = RobotOrder(
+            order_id=f"op_{int(time.time())}",
+            type=order_data.get("type", "custom"),
+            robot_id=robot_id,
+            params=order_data.get("params", {}),
+            priority=order_data.get("priority", 0),
+            source="operator",
+        )
+        ok_result = self._comm.发送指令(robot_id, order)
+        self._db.处理待确认(pid, "confirmed" if action == "confirm" else "modified", order_data)
+        self._db.记录干预(f"待确认_{action}", robot_id=robot_id, order=order_data)
+        return ok({"ok": ok_result, "robot_id": robot_id}, f"指令已{'执行' if ok_result else '下发(机器人可能离线)'}")
 
     def _orders_intervene(self):
         """操作员接管：拦截 LLM 决策并发布新指令"""

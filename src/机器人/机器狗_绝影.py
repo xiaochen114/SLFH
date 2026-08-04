@@ -11,10 +11,11 @@ from 机器人.机器狗控制 import DogController
 class 机器狗_绝影(RobotBase):
     """绝影Lite3 机器狗适配层"""
 
-    def __init__(self, robot_id: str = "绝影1号",
+    def __init__(self, robot_id: str = "",
                  ip: str = "192.168.1.120",
                  cmd_port: int = 43893,
                  state_port: int = 43894):
+        # robot_id 由注册中心系统分配，此处仅占位
         super().__init__(robot_id)
         self._dog = DogController(ip=ip, cmd_port=cmd_port, state_port=state_port)
 

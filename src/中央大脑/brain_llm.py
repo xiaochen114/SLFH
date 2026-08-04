@@ -211,9 +211,13 @@ class LLM调度引擎:
 
         orders = []
         for o in raw_orders:
+            rid = o.get("robot_id", "")
+            if isinstance(rid, dict):  # 防 LLM 返回嵌套结构
+                rid = rid.get("id", "") or ""
             orders.append(RobotOrder(
                 order_id=f"llm_{int(time.time())}_{len(orders)}",
                 type=o.get("type", "custom"),
+                robot_id=rid if isinstance(rid, str) else "",
                 params=o.get("params", {}),
                 priority=o.get("priority", 0),
                 source="brain",
@@ -263,46 +267,63 @@ orders 仅在需要执行操作时填，不需要则空数组。回复要简洁�
         robots = context.get("robots", [])
         patrol_points = context.get("patrol_points", [])
 
+        def 找空闲(类型=None):
+            """从在线机器人里挑一个（可限定类型），返回 robot_id"""
+            for r in robots:
+                if not r.get("id"):
+                    continue
+                if r.get("health") != "ok":
+                    continue
+                if 类型 and r.get("type") != 类型:
+                    continue
+                return r.get("id")
+            return ""
+
         for ev in events:
             etype = ev.get("type", "")
             if etype == "fire_detected":
-                orders.append(RobotOrder(
-                    f"rule_{int(time.time())}_1", "alert",
-                    {"reason": "fire"}, priority=3, source="brain"))
-                for r in robots:
-                    if r.get("type") == "drone" and r.get("health") == "ok":
-                        orders.append(RobotOrder(
-                            f"rule_{int(time.time())}_2", "inspect",
-                            {"target": ev.get("position", (0, 0))},
-                            priority=2, source="brain"))
-                        break
+                # 派狗急停 + 无人机去火点侦察
+                狗id = 找空闲("dog")
+                无人机id = 找空闲("drone")
+                if 狗id:
+                    orders.append(RobotOrder(
+                        f"rule_{int(time.time())}_1", "alert",
+                        狗id, {"reason": "fire"}, priority=3, source="brain"))
+                if 无人机id:
+                    orders.append(RobotOrder(
+                        f"rule_{int(time.time())}_2", "inspect",
+                        无人机id, {"target": ev.get("position", (0, 0))},
+                        priority=2, source="brain"))
             elif etype == "smoke_detected":
-                # 派机器人去最近的巡逻点巡查（有巡逻点则用坐标）
+                # 派狗去最近的巡逻点巡查（有巡逻点则用坐标）
+                狗id = 找空闲("dog")
                 point = patrol_points[0] if patrol_points else None
                 params = {"speed": 10000}
                 if point:
                     params["target"] = [point.get("x", 0), point.get("y", 0)]
                     params["point"] = point.get("name", "")
-                orders.append(RobotOrder(
-                    f"rule_{int(time.time())}_3", "patrol",
-                    params, priority=1, source="brain"))
+                if 狗id:
+                    orders.append(RobotOrder(
+                        f"rule_{int(time.time())}_3", "patrol",
+                        狗id, params, priority=1, source="brain"))
             elif etype == "communication_lost":
-                for r in robots:
-                    if r.get("type") == "drone" and r.get("health") == "ok":
-                        orders.append(RobotOrder(
-                            f"rule_{int(time.time())}_4", "custom",
-                            {"command": "fly_to_relay",
-                             "target": ev.get("position", (0, 0))},
-                            priority=2, source="brain"))
-                        break
+                无人机id = 找空闲("drone")
+                if 无人机id:
+                    orders.append(RobotOrder(
+                        f"rule_{int(time.time())}_4", "custom",
+                        无人机id,
+                        {"command": "fly_to_relay",
+                         "target": ev.get("position", (0, 0))},
+                        priority=2, source="brain"))
 
         # 低电量巡检
         for r in robots:
             bat = r.get("battery", 1)
-            if bat < 0.2 and r.get("mode") != "returning":
+            rid = r.get("id", "")
+            if rid and bat < 0.2 and r.get("mode") != "returning":
                 orders.append(RobotOrder(
                     f"rule_{int(time.time())}_bat", "return",
-                    {}, priority=2, source="brain"))
+                    rid, {}, priority=2, source="brain"))
 
         return orders
 

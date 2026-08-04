@@ -4,6 +4,23 @@ import time, threading
 from typing import Dict, Optional
 from 机器人.robot_base import RobotBase
 
+# 品牌名映射（robot_type → 品牌）
+品牌映射 = {
+    "dog": "绝影",
+    "drone": "大疆",
+    "other": "设备",
+}
+
+
+def 生成机器人ID(robot_type: str, 序号=0) -> str:
+    """系统分配机器人 ID: 品牌-时间戳[-序号]
+    唯一性: 品牌+时间戳到秒, 同秒多台加序号兜底"""
+    品牌 = 品牌映射.get(robot_type, "设备")
+    时间戳 = time.strftime("%Y%m%d-%H%M%S")
+    if 序号:
+        return f"{品牌}-{时间戳}-{序号}"
+    return f"{品牌}-{时间戳}"
+
 
 class 机器人注册中心:
     def __init__(self, event_bus=None):
@@ -16,13 +33,29 @@ class 机器人注册中心:
         t.start()
 
     def 注册(self, robot: RobotBase) -> bool:
+        """注册机器人，分配系统 ID（唯一），不信任机器人自报名"""
         with self._lock:
-            rid = robot.robot_id
-            if rid in self._robots:
-                return False
+            # 从机器人状态推断类型，生成系统 ID
+            类型 = "other"
+            try:
+                st = robot.get_status()
+                类型 = st.robot_type
+            except:
+                pass
+
+            序号 = 0
+            while True:
+                rid = 生成机器人ID(类型, 序号 if 序号 else 0)
+                if rid not in self._robots:
+                    break
+                序号 += 1
+            # 写入机器人（用系统ID覆盖自报名）
+            robot._robot_id = rid
             self._robots[rid] = robot
             self._last_heartbeat[rid] = time.time()
             print(f"[注册中心] {rid} 已注册")
+            if self._event_bus:
+                self._event_bus.发布("robot_connected", {"robot_id": rid})
             return True
 
     def 注销(self, robot_id: str):
@@ -47,6 +80,8 @@ class 机器人注册中心:
         return len(self._robots)
 
     def 心跳(self, robot_id: str):
+        if not isinstance(robot_id, str):
+            return  # 非法 robot_id，忽略
         with self._lock:
             self._last_heartbeat[robot_id] = time.time()
 
@@ -56,6 +91,8 @@ class 机器人注册中心:
             now = time.time()
             with self._lock:
                 for rid, last in list(self._last_heartbeat.items()):
+                    if not isinstance(rid, str):
+                        continue  # 跳过非法的 key
                     gap = now - last
                     if gap > 30:
                         print(f"[注册中心] {rid} 超时断连 ({gap:.0f}s)")
