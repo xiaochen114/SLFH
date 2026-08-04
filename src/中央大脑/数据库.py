@@ -257,26 +257,6 @@ class 数据库:
                 result.append(d)
             return result
 
-    def 查询事件(self, source=None, type=None, limit=100):
-        """查询事件历史（不论是否消费）"""
-        with self._锁:
-            conn = self._连接()
-            sql = "SELECT * FROM events"
-            conds, params = [], []
-            if source:
-                conds.append("source=?")
-                params.append(source)
-            if type:
-                conds.append("type=?")
-                params.append(type)
-            if conds:
-                sql += " WHERE " + " AND ".join(conds)
-            sql += " ORDER BY id DESC LIMIT ?"
-            params.append(limit)
-            rows = conn.execute(sql, params).fetchall()
-            conn.close()
-            return [dict(r) for r in rows]
-
     # ---- 系统配置 ----
 
     def 保存配置(self, key, value):

@@ -207,6 +207,39 @@ class LLM调度引擎:
         print(f"[LLM] 生成 {len(orders)} 条调度指令")
         return orders
 
+    def 对话(self, prompt, system=None):
+        """操作员对话：返回结构化 {reply, orders}。orders 不直接下发"""
+        对话提示词 = system or """你是调度大脑，回答操作员的调度问题。
+只输出 JSON 对象: {"reply": "你的回答", "orders": [{"type":"指令类型","robot_id":"机器人ID","params":{},"priority":0-3}]}
+orders 仅在需要执行操作时填，不需要则空数组。回复要简洁中文。"""
+        try:
+            body = json.dumps({
+                "model": self._api_model,
+                "messages": [
+                    {"role": "system", "content": 对话提示词},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0, "max_tokens": 512,
+            }).encode()
+            req = urllib.request.Request(
+                self._api_url, data=body,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self._api_key}"},
+                method="POST")
+            resp = urllib.request.urlopen(req, timeout=LLM_TIMEOUT)
+            raw = json.loads(resp.read().decode())
+            content = raw["choices"][0]["message"]["content"].strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            parsed = json.loads(content)
+            return {
+                "reply": parsed.get("reply", ""),
+                "orders": parsed.get("orders", []) or [],
+            }
+        except Exception as e:
+            print(f"[LLM] 对话失败: {e}")
+            return {"reply": "", "orders": [], "error": str(e)}
+
     # ======================== 规则决策（降级） ========================
 
     def _规则决策(self, context: dict) -> list:

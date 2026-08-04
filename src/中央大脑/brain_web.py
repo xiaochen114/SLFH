@@ -166,34 +166,16 @@ class Web面板:
         self._db.记录对话("operator", content)
         # 2. 构建带记忆的上下文
         prompt = self._记忆.构建上下文(content) if self._记忆 else content
-        # 3. 调 LLM（半自动：生成指令但不直接下发）
-        from 机器人.robot_base import RobotOrder
-        对话提示词 = """你是调度大脑，回答操作员的调度问题。
-如需要执行操作，输出 JSON 数组: [{"type":"指令类型","robot_id":"机器人ID","params":{},"priority":0-3}]
-不需要执行时输出空数组 []。回复要简洁中文。"""
-        try:
-            结果 = self._llm._llm决策(
-                {"robots": [], "events": [{"type": "对话", "label": "对话", "data": {"提示": prompt}}]},
-                system=对话提示词,
-            )
-        except Exception as e:
-            return fail(500, f"LLM 调用失败: {e}")
+        # 3. 调 LLM（半自动：返回自然语言回复 + 可选指令，不直接下发）
+        结果 = self._llm.对话(prompt)
+        if 结果.get("error"):
+            return fail(500, f"LLM 调用失败: {结果['error']}")
+        回复文本 = 结果.get("reply", "")
+        指令列表 = 结果.get("orders", []) or []
 
-        # 4. 解析回复：取非指令文本 + 指令
-        指令列表 = []
-        回复文本 = content  # 占位
-        if 结果:
-            for o in 结果:
-                指令列表.append({
-                    "type": o.type, "robot_id": o.params.get("robot_id", ""),
-                    "params": o.params, "priority": o.priority,
-                })
-
-        # 简化：LLM 回复文本用第一句说明
-        回复文本 = "已理解。"
+        # 4. 半自动：指令进待确认队列，不直接下发
         if 指令列表:
             self._db.记录对话("llm", 回复文本, 指令列表)
-            # 半自动：指令进待确认队列
             for 指令 in 指令列表:
                 if 指令.get("robot_id"):
                     self._db.添加待确认(指令["robot_id"], 指令, source="llm")

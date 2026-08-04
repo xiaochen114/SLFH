@@ -86,23 +86,3 @@ class 检测服务:
         if self._bus:
             self._bus.发布(事件类型, {**data, "priority": priority})
 
-    def 模拟火情(self):
-        """测试用：写入一条模拟火情事件（特急）"""
-        print("[检测] 模拟火情事件[特急]")
-        data = {
-            "alert_level": 3,
-            "detections": [{"name": "fire", "confidence": 0.95}],
-            "position": (2, 3),
-        }
-        if self._db:
-            self._db.记录事件(
-                source="yolo",
-                type="fire_detected",
-                label="火焰",
-                level=3,
-                priority=2,  # 特急
-                data=data,
-            )
-        if self._bus:
-            self._bus.发布("fire_detected", {**data, "priority": 2})
-
