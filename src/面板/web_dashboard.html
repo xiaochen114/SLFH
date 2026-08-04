@@ -144,6 +144,18 @@
   <!-- LLM 状态卡 -->
   <div class="stats" id="llmStatsBar"></div>
 
+  <!-- 检测画面 -->
+  <div class="page-section">
+    <h3>检测画面 <span class="badge" id="detSrcBadge">-</span></h3>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+      <select id="detSrcSelect" style="padding:7px 10px;border:1px solid #d4d7dd;border-radius:4px;font-size:12px">
+        <option value="-1">自动(最高报警)</option>
+      </select>
+      <span style="color:#9ca3af;font-size:12px">多路视频流 YOLO 实时检测</span>
+    </div>
+    <img id="detFrame" src="" alt="检测画面" style="width:100%;max-height:260px;object-fit:contain;background:#0d1117;border-radius:6px;display:none">
+  </div>
+
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
     <!-- 实时流水 -->
     <div class="page-section">
@@ -272,7 +284,45 @@ async function loadCommand(){
   loadChatHistory();
   loadPending();
   loadFlow();
+  loadDetSources();
 }
+
+// ======================== 检测画面 ========================
+let _detSrc = -1;  // 当前选中的视频源
+
+async function loadDetSources(){
+  try {
+    const r = await api('/detection/sources');
+    const sources = r.data || [];
+    const sel = $('detSrcSelect');
+    if(!sources.length){
+      $('detSrcBadge').textContent = '未启用';
+      return;
+    }
+    $('detSrcBadge').textContent = sources.length + ' 路';
+    // 重建下拉
+    const cur = sel.value;
+    sel.innerHTML = '<option value="-1">自动(最高报警)</option>' +
+      sources.map(s=>'<option value="'+s.id+'">源'+s.id+': '+s.source+'</option>').join('');
+    if([...sel.options].some(o=>o.value===cur)) sel.value = cur;
+    // 更新帧
+    updateDetFrame();
+  }catch(e){}
+}
+
+function updateDetFrame(){
+  const img = $('detFrame');
+  if(_detSrc === null) return;
+  img.src = '/api/v1/detection/frame' + (_detSrc >= 0 ? '?src='+_detSrc : '') + '&t=' + Date.now();
+  img.style.display = 'block';
+}
+
+// 切换视频源
+$('detSrcSelect') && ($('detSrcSelect').onchange = function(){
+  _detSrc = parseInt(this.value);
+  updateDetFrame();
+});
+
 
 async function loadLLMStats(){
   try {
@@ -558,7 +608,7 @@ loadDashboard();
 setInterval(()=>{
   const a=document.querySelector('.content.active');
   if(a&&a.id==='page_dashboard') loadDashboard();
-  if(a&&a.id==='page_command'){ loadFlow(); loadPending(); loadLLMStats(); }
+  if(a&&a.id==='page_command'){ loadFlow(); loadPending(); loadLLMStats(); loadDetSources(); }
 },3000);
 
 // ======================== LLM 状态轮询 ========================

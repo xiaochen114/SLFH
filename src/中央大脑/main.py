@@ -55,14 +55,14 @@ class 中央大脑:
         if 启用巡逻:
             self.感知主机 = 感知主机控制()
 
-        # YOLO 火情检测（事件写入数据库，带标签即取即用）
+        # YOLO 火情检测（多路视频流，事件写入数据库，带 source 标签）
         self.检测 = None
         if cfg.get("model_path"):
             self.检测 = 检测服务(
                 self.事件总线,
                 self.db,
                 模型路径=cfg["model_path"],
-                摄像头=cfg.get("camera_url", 0),
+                视频源=cfg.get("视频源", cfg.get("camera_url", 0)),
                 置信度=cfg.get("conf_thresh", 0.5),
             )
         else:
@@ -71,7 +71,7 @@ class 中央大脑:
         self.web = Web面板(
             self.registry, self.comm, self.db, self.告警, self.事件总线,
             web_host, web_port, patrol=self.patrol, llm=self.llm,
-            自愈=self.自愈, 记忆=self.记忆, 大脑=self,
+            自愈=self.自愈, 记忆=self.记忆, 大脑=self, 检测=self.检测,
         )
 
     def 启动(self):

@@ -4,8 +4,12 @@
 model_path: "E:/zy/runs/detect/fire_smoke_cigarette_3class/weights/best.pt"
 conf_thresh: 0.5
 detect_interval: 0.2
-# --- 摄像头 ---
-camera_url: 0
+# --- 视频源（多路检测）---
+# 支持: 数字=本机摄像头 / rtsp地址 / 视频文件路径
+视频源:
+  - 0
+  # - "rtsp://192.168.1.103:8554/stream"
+  # - "demo_video.mp4"
 frame_width: 640
 frame_height: 480
 # --- 机器狗网络 ---

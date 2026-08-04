@@ -29,7 +29,7 @@ def fail(code=400, message="error", data=None):
 class Web面板:
     """中央大脑 HTTP API v1 + SSE 实时推送"""
 
-    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None, llm=None, 自愈=None, 记忆=None, 大脑=None):
+    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None, llm=None, 自愈=None, 记忆=None, 大脑=None, 检测=None):
         self._registry = registry
         self._comm = comm
         self._db = db
@@ -38,6 +38,7 @@ class Web面板:
         self._自愈 = 自愈
         self._记忆 = 记忆
         self._大脑 = 大脑
+        self._检测 = 检测
         self._event_bus = event_bus or 事件总线()
         self._host = host
         self._port = port
@@ -105,6 +106,10 @@ class Web面板:
         a.add_url_rule("/api/v1/orders/confirm", "orders_confirm", self._orders_confirm, methods=["POST"])
         a.add_url_rule("/api/v1/orders/intervene", "orders_intervene", self._orders_intervene, methods=["POST"])
         a.add_url_rule("/api/v1/intervention/history", "intervention_history", self._intervention_history)
+
+        # API v1 - 检测画面
+        a.add_url_rule("/api/v1/detection/sources", "detection_sources", self._detection_sources)
+        a.add_url_rule("/api/v1/detection/frame", "detection_frame", self._detection_frame)
 
         # API v1 - 自愈
         a.add_url_rule("/api/v1/selfheal/status", "selfheal_status", self._selfheal_status)
@@ -272,6 +277,34 @@ class Web面板:
         if not self._db:
             return ok([])
         return ok(self._db.查询干预日志(50))
+
+    # ======================== API v1: 检测画面 ========================
+
+    def _detection_sources(self):
+        """视频源列表"""
+        if not self._检测:
+            return ok([])
+        return ok(self._检测.获取源列表())
+
+    def _detection_frame(self):
+        """某路视频源的标注帧（JPEG）"""
+        if not self._检测:
+            return "not found", 404
+        src_id = request.args.get("src")
+        if src_id is not None:
+            try:
+                src_id = int(src_id)
+            except:
+                src_id = None
+        frame = self._检测.获取标注帧(src_id)
+        if frame is None:
+            return "no frame", 404
+        import cv2
+        ok, buf = cv2.imencode(".jpg", frame)
+        if not ok:
+            return "encode fail", 500
+        return Response(buf.tobytes(), mimetype="image/jpeg",
+                        headers={"Cache-Control": "no-store"})
 
     # ======================== API v1: 自愈 ========================
 

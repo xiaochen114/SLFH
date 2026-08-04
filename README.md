@@ -23,7 +23,7 @@ E:\zy\
 │   │   └── 日志系统.py        # 统一日志（控制台 + 文件）
 │   │
 │   ├── 检测/                 # 火情检测模块
-│   │   └── 火情检测.py        # YOLO 实时检测（火焰/烟雾/烟头）
+│   │   └── 火情检测.py        # YOLO 多路视频流检测（火焰/烟雾/烟头）
 │   │
 │   ├── 机器人/               # 机器人控制层
 │   │   ├── robot_base.py     # RobotBase 抽象基类 + 数据类型
@@ -121,8 +121,23 @@ python 主控.py --patrol
 | `GET /api/v1/selfheal/pending` | 待确认高危操作 |
 | `POST /api/v1/selfheal/confirm` | 确认/拒绝高危操作 |
 | `GET /api/v1/selfheal/history` | 自愈历史 |
+| `GET /api/v1/detection/sources` | 检测视频源列表 |
+| `GET /api/v1/detection/frame` | 检测标注帧（JPEG）|
 
 ---
+
+## 多路视频流检测
+
+- 单个 YOLO 模型共享检测多路视频源，任意一路报警都触发紧急事件
+- 视频源支持：本机摄像头(数字) / RTSP地址 / 视频文件
+- 配置在 `配置.yaml` 的 `视频源` 列表：
+  ```yaml
+  视频源:
+    - 0                          # 本机摄像头
+    - "rtsp://192.168.1.103:8554/stream"   # 网络摄像头
+    - "demo_video.mp4"           # 预录视频（演示用）
+  ```
+- 检测结果带 `source_id` 标签区分来源，前端指挥台可切换查看各路画面
 
 ## 机器人身份
 
