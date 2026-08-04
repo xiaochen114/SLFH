@@ -88,6 +88,45 @@ class 数据库:
                 CREATE INDEX IF NOT EXISTS idx_events_consumed ON events(consumed);
                 CREATE INDEX IF NOT EXISTS idx_events_priority ON events(priority);
                 CREATE INDEX IF NOT EXISTS idx_events_time ON events(created_at);
+
+                CREATE TABLE IF NOT EXISTS llm_decision (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    mode TEXT DEFAULT 'llm',        -- llm / rule
+                    events_json TEXT,               -- 输入: 事件摘要
+                    robots_json TEXT,               -- 输入: 机器人状态摘要
+                    orders_json TEXT,               -- 输出: 决策指令
+                    latency_ms INTEGER DEFAULT 0,   -- 决策耗时
+                    created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_llm_decision_time ON llm_decision(created_at);
+
+                CREATE TABLE IF NOT EXISTS llm_chat (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role TEXT NOT NULL,             -- operator / llm
+                    content TEXT NOT NULL,          -- 消息内容
+                    orders_json TEXT,               -- LLM 生成待确认指令(半自动)
+                    created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_llm_chat_time ON llm_chat(created_at);
+
+                CREATE TABLE IF NOT EXISTS intervention_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action TEXT NOT NULL,           -- 接管/纠正/手动下发
+                    robot_id TEXT,
+                    order_json TEXT,                -- 干预的指令
+                    reason TEXT,                    -- 原因
+                    created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS pending_orders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    robot_id TEXT,
+                    order_json TEXT,                -- 待确认指令
+                    source TEXT DEFAULT 'llm',      -- llm / operator
+                    status TEXT DEFAULT 'pending',  -- pending/confirmed/rejected/modified
+                    created_at REAL NOT NULL DEFAULT (strftime('%s','now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_orders(status);
             """)
             conn.commit()
             conn.close()
@@ -281,3 +320,145 @@ class 数据库:
                 "counts": {r["k"]: r["v"] for r in counts},
                 "recent_tasks": [dict(r) for r in recent],
             }
+
+    # ---- LLM 决策日志（记忆来源 + 审计）----
+
+    def 记录LLM决策(self, mode, events=None, robots=None, orders=None, latency_ms=0):
+        with self._锁:
+            conn = self._连接()
+            conn.execute(
+                "INSERT INTO llm_decision(mode, events_json, robots_json, orders_json, latency_ms) VALUES (?,?,?,?,?)",
+                (mode,
+                 json.dumps(events or [], ensure_ascii=False),
+                 json.dumps(robots or [], ensure_ascii=False),
+                 json.dumps(orders or [], ensure_ascii=False),
+                 latency_ms),
+            )
+            conn.commit()
+            conn.close()
+
+    def 查询LLM决策(self, limit=20):
+        """取最近决策记录（作对话记忆 + 审计）"""
+        with self._锁:
+            conn = self._连接()
+            rows = conn.execute(
+                "SELECT * FROM llm_decision ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            conn.close()
+            result = []
+            for r in rows:
+                d = dict(r)
+                for k in ("events_json", "robots_json", "orders_json"):
+                    try:
+                        d[k] = json.loads(d.get(k, "[]") or "[]")
+                    except:
+                        d[k] = []
+                result.append(d)
+            return result
+
+    # ---- 操作员↔LLM 对话 ----
+
+    def 记录对话(self, role, content, orders=None):
+        with self._锁:
+            conn = self._连接()
+            conn.execute(
+                "INSERT INTO llm_chat(role, content, orders_json) VALUES (?,?,?)",
+                (role, content, json.dumps(orders or [], ensure_ascii=False)),
+            )
+            conn.commit()
+            conn.close()
+
+    def 查询对话(self, limit=50):
+        with self._锁:
+            conn = self._连接()
+            rows = conn.execute(
+                "SELECT * FROM llm_chat ORDER BY id ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            conn.close()
+            result = []
+            for r in rows:
+                d = dict(r)
+                try:
+                    d["orders_json"] = json.loads(d.get("orders_json", "[]") or "[]")
+                except:
+                    d["orders_json"] = []
+                result.append(d)
+            return result
+
+    # ---- 人工干预审计 ----
+
+    def 记录干预(self, action, robot_id=None, order=None, reason=""):
+        with self._锁:
+            conn = self._连接()
+            conn.execute(
+                "INSERT INTO intervention_log(action, robot_id, order_json, reason) VALUES (?,?,?,?)",
+                (action, robot_id, json.dumps(order or {}, ensure_ascii=False), reason),
+            )
+            conn.commit()
+            conn.close()
+
+    def 查询干预日志(self, limit=50):
+        with self._锁:
+            conn = self._连接()
+            rows = conn.execute(
+                "SELECT * FROM intervention_log ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            conn.close()
+            result = []
+            for r in rows:
+                d = dict(r)
+                try:
+                    d["order_json"] = json.loads(d.get("order_json", "{}") or "{}")
+                except:
+                    d["order_json"] = {}
+                result.append(d)
+            return result
+
+    # ---- 待确认指令（对话转指令 / 接管）----
+
+    def 添加待确认(self, robot_id, order, source="llm"):
+        with self._锁:
+            conn = self._连接()
+            cur = conn.execute(
+                "INSERT INTO pending_orders(robot_id, order_json, source, status) VALUES (?,?,?,?)",
+                (robot_id, json.dumps(order, ensure_ascii=False), source, "pending"),
+            )
+            pid = cur.lastrowid
+            conn.commit()
+            conn.close()
+            return pid
+
+    def 查询待确认(self, limit=20):
+        with self._锁:
+            conn = self._连接()
+            rows = conn.execute(
+                "SELECT * FROM pending_orders WHERE status='pending' ORDER BY id ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            conn.close()
+            result = []
+            for r in rows:
+                d = dict(r)
+                try:
+                    d["order_json"] = json.loads(d.get("order_json", "{}") or "{}")
+                except:
+                    d["order_json"] = {}
+                result.append(d)
+            return result
+
+    def 处理待确认(self, pid, status, new_order=None):
+        """确认/拒绝/修改待确认指令"""
+        with self._锁:
+            conn = self._连接()
+            if status == "modified" and new_order:
+                conn.execute(
+                    "UPDATE pending_orders SET status=?, order_json=? WHERE id=?",
+                    (status, json.dumps(new_order, ensure_ascii=False), pid),
+                )
+            else:
+                conn.execute("UPDATE pending_orders SET status=? WHERE id=?", (status, pid))
+            conn.commit()
+            conn.close()

@@ -132,13 +132,62 @@
 </div>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('dashboard')" id="tab_dashboard">总览</div>
+  <div class="tab active" onclick="switchTab('command')" id="tab_command">指挥台</div>
+  <div class="tab" onclick="switchTab('dashboard')" id="tab_dashboard">总览</div>
   <div class="tab" onclick="switchTab('robots')" id="tab_robots">机器人</div>
   <div class="tab" onclick="switchTab('patrol')" id="tab_patrol">巡逻</div>
   <div class="tab" onclick="switchTab('history')" id="tab_history">日志</div>
 </div>
 
-<div class="content active" id="page_dashboard">
+<!-- ======================== 指挥台 ======================== -->
+<div class="content active" id="page_command">
+  <!-- LLM 状态卡 -->
+  <div class="stats" id="llmStatsBar"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+    <!-- 实时流水 -->
+    <div class="page-section">
+      <h3>调度流水 <span class="badge" id="flowBadge">LIVE</span></h3>
+      <div class="log-box" id="flowLog" style="max-height:320px"><div class="empty">等待调度事件...</div></div>
+    </div>
+
+    <!-- 对话窗口 -->
+    <div class="page-section">
+      <h3>操作员 ↔ LLM</h3>
+      <div class="log-box" id="chatLog" style="max-height:240px;margin-bottom:10px"><div class="empty">开始对话...</div></div>
+      <div class="patrol-controls">
+        <input id="chatInput" placeholder="对 LLM 下达指令或提问..." style="flex:1;width:auto;min-width:200px"
+               onkeydown="if(event.key==='Enter')chatSend()">
+        <button class="btn btn-primary btn-sm" onclick="chatSend()">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 待确认指令 -->
+  <div class="page-section">
+    <h3>待确认指令 <span class="badge" id="pendingBadge">0</span></h3>
+    <div class="patrol-list" id="pendingList"><div class="empty">暂无待确认指令</div></div>
+  </div>
+
+  <!-- 人工干预操作区 -->
+  <div class="page-section">
+    <h3>人工干预 <span class="badge">操作员</span></h3>
+    <div class="patrol-controls">
+      <input id="opRobot" placeholder="机器人ID" style="width:120px">
+      <select id="opCommand" style="padding:7px 10px;border:1px solid #d4d7dd;border-radius:4px;font-size:12px">
+        <option value="stand">起立</option>
+        <option value="patrol">巡逻</option>
+        <option value="stop">停止</option>
+        <option value="return">返航</option>
+        <option value="alert" style="color:#dc2626">急停</option>
+      </select>
+      <input id="opReason" placeholder="原因(可选)" style="flex:1;min-width:150px">
+      <button class="btn btn-success btn-sm" onclick="intervene()">下发</button>
+    </div>
+  </div>
+</div>
+
+<div class="content" id="page_dashboard">
   <div class="stats" id="statsBar"></div>
   <div class="page-section">
     <h3>告警消息</h3>
@@ -211,10 +260,128 @@ function switchTab(name){
   document.querySelectorAll('.content').forEach(c=>c.classList.remove('active'));
   $('tab_'+name).classList.add('active');
   $('page_'+name).classList.add('active');
+  if(name==='command') loadCommand();
   if(name==='robots') loadRobots();
   if(name==='patrol') loadPatrol();
   if(name==='history') loadHistory('tasks');
 }
+
+// ======================== 指挥台 ========================
+async function loadCommand(){
+  loadLLMStats();
+  loadChatHistory();
+  loadPending();
+  loadFlow();
+}
+
+async function loadLLMStats(){
+  try {
+    const r = await api('/llm/status');
+    const st = r.data||{};
+    const badge = $('llmBadge');
+    if(st.降级中 || st.mode==='rule'){ badge.style.display='inline'; badge.textContent='LLM 降级中'; }
+    else { badge.style.display='none'; }
+    $('llmStatsBar').innerHTML =
+      '<div class="stat-card"><div class="num">'+(st.mode==='llm'?'在线':'降级')+'</div><div class="lbl">LLM 状态</div></div>'+
+      '<div class="stat-card"><div class="num">'+ (st.连续失败||0) +'</div><div class="lbl">连续失败</div></div>'+
+      '<div class="stat-card"><div class="num">'+ (st.最后成功?new Date(st.最后成功*1000).toLocaleTimeString():'-') +'</div><div class="lbl">最后成功</div></div>'+
+      (st.最后错误?'<div class="stat-card"><div class="num" style="font-size:14px;color:#dc2626">ERR</div><div class="lbl">'+(st.最后错误+'').slice(0,20)+'</div></div>':'');
+  }catch(e){}
+}
+
+async function loadFlow(){
+  try {
+    const r = await api('/llm/history');
+    const rows = (r.data||[]).slice(0,20).reverse();  // 时间正序
+    const box = $('flowLog');
+    if(!rows.length){ box.innerHTML='<div class="empty">等待调度事件...</div>'; return; }
+    box.innerHTML = rows.map(d=>{
+      const t = new Date(d.created_at*1000).toLocaleTimeString();
+      const mode = d.mode==='llm'?'LLM':'规则';
+      const evs = (d.events_json||[]).map(e=>e.label||e.type||'?').join(',')||'无事件';
+      const ods = (d.orders_json||[]).map(o=>o.type+'→'+o.robot_id).join(',')||'无指令';
+      const ms = d.latency_ms||0;
+      return '<div class="line">['+t+'] ['+mode+'] '+evs+' → '+ods+' ('+ms+'ms)</div>';
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="empty">加载失败</div>'; }
+}
+
+async function loadChatHistory(){
+  try {
+    const r = await api('/chat/history');
+    const rows = r.data||[];
+    const box = $('chatLog');
+    if(!rows.length){ box.innerHTML='<div class="empty">开始对话...</div>'; return; }
+    box.innerHTML = rows.map(d=>{
+      const who = d.role==='operator'?'操作员':'LLM';
+      return '<div class="line"><b>'+who+'</b>: '+d.content+'</div>';
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+  }catch(e){}
+}
+
+async function loadPending(){
+  try {
+    const r = await api('/orders/pending');
+    const rows = r.data||[];
+    $('pendingBadge').textContent = rows.length;
+    const box = $('pendingList');
+    if(!rows.length){ box.innerHTML='<div class="empty">暂无待确认指令</div>'; return; }
+    box.innerHTML = rows.map(p=>{
+      const o = p.order_json||{};
+      return '<div class="patrol-item">'+
+        '<span><b>'+o.type+'</b> → '+p.robot_id+' <span class="tag tag-dog">'+(p.source==='operator'?'操作员':'LLM')+'</span></span>'+
+        '<span style="display:flex;gap:4px">'+
+        '<button class="btn btn-success btn-sm" onclick="pendingAction('+p.id+',\'confirm\')">执行</button>'+
+        '<button class="btn btn-danger btn-sm" onclick="pendingAction('+p.id+',\'reject\')">拒绝</button>'+
+        '</span></div>';
+    }).join('');
+  }catch(e){}
+}
+
+async function pendingAction(id, action){
+  await api('/orders/confirm', {method:'POST', body:JSON.stringify({id, action})});
+  loadPending();
+}
+
+async function chatSend(){
+  const input = $('chatInput');
+  const content = input.value.trim();
+  if(!content) return;
+  input.value='';
+  // 显示操作员消息
+  $('chatLog').innerHTML += '<div class="line"><b>操作员</b>: '+content+'</div>';
+  try {
+    const r = await api('/chat/send', {method:'POST', body:JSON.stringify({content})});
+    if(r.code===200){
+      $('chatLog').innerHTML += '<div class="line"><b>LLM</b>: '+(r.data?.reply||'')+'</div>';
+      if(r.data?.orders?.length){
+        $('chatLog').innerHTML += '<div class="line" style="color:#2563eb">↳ 生成 '+r.data.orders.length+' 条待确认指令</div>';
+      }
+    } else {
+      $('chatLog').innerHTML += '<div class="line" style="color:#dc2626">错误: '+(r.message||'')+'</div>';
+    }
+  }catch(e){
+    $('chatLog').innerHTML += '<div class="line" style="color:#dc2626">连接失败</div>';
+  }
+  $('chatLog').scrollTop = $('chatLog').scrollHeight;
+  loadPending();
+}
+
+async function intervene(){
+  const robotId = $('opRobot').value.trim();
+  const cmd = $('opCommand').value;
+  const reason = $('opReason').value.trim();
+  if(!robotId){ alert('请输入机器人ID'); return; }
+  // 高危命令二次确认
+  if(cmd==='alert'){
+    if(!confirm('确认对 '+robotId+' 执行急停？')) return;
+  }
+  const r = await api('/orders/intervene', {method:'POST', body:JSON.stringify({robot_id:robotId, command:cmd, reason})});
+  if(r.code===200){ $('opReason').value=''; addAlert({level:'info',message:'人工下发 '+cmd+' → '+robotId,time:Date.now()/1000}); }
+  else { alert('下发失败: '+(r.message||'')); }
+}
+
 
 const evtSource = new EventSource(API + '/events');
 const _seen = new Set();
@@ -224,6 +391,7 @@ evtSource.onmessage = function(e){
     const ev = JSON.parse(e.data);
     if(ev.type==='alert') addAlert(ev.data);
     if(ev.type==='system_health') updateStats(ev.data);
+    if(ev.type==='llm_decision'){ loadFlow(); loadLLMStats(); }
   } catch(ex) {}
 };
 
@@ -387,7 +555,11 @@ async function loadHistory(type){
 }
 
 loadDashboard();
-setInterval(()=>{const a=document.querySelector('.content.active');if(a&&a.id==='page_dashboard')loadDashboard();},3000);
+setInterval(()=>{
+  const a=document.querySelector('.content.active');
+  if(a&&a.id==='page_dashboard') loadDashboard();
+  if(a&&a.id==='page_command'){ loadFlow(); loadPending(); loadLLMStats(); }
+},3000);
 
 // ======================== LLM 状态轮询 ========================
 async function checkLLMStatus(){

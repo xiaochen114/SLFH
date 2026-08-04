@@ -29,13 +29,15 @@ def fail(code=400, message="error", data=None):
 class Web面板:
     """中央大脑 HTTP API v1 + SSE 实时推送"""
 
-    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None, llm=None, 自愈=None):
+    def __init__(self, registry, comm, db=None, 告警=None, event_bus=None, host="0.0.0.0", port=5000, patrol=None, llm=None, 自愈=None, 记忆=None, 大脑=None):
         self._registry = registry
         self._comm = comm
         self._db = db
         self._告警 = 告警
         self._llm = llm
         self._自愈 = 自愈
+        self._记忆 = 记忆
+        self._大脑 = 大脑
         self._event_bus = event_bus or 事件总线()
         self._host = host
         self._port = port
@@ -94,8 +96,15 @@ class Web面板:
                        self._patrol_stop, methods=["POST"])
         a.add_url_rule("/api/v1/patrol/status", "patrol_status", self._patrol_status)
 
-        # API v1 - LLM 状态
+        # API v1 - LLM 状态 / 决策日志 / 对话 / 接管
         a.add_url_rule("/api/v1/llm/status", "llm_status", self._llm_status)
+        a.add_url_rule("/api/v1/llm/history", "llm_history", self._llm_history)
+        a.add_url_rule("/api/v1/chat/history", "chat_history", self._chat_history)
+        a.add_url_rule("/api/v1/chat/send", "chat_send", self._chat_send, methods=["POST"])
+        a.add_url_rule("/api/v1/orders/pending", "orders_pending", self._orders_pending)
+        a.add_url_rule("/api/v1/orders/confirm", "orders_confirm", self._orders_confirm, methods=["POST"])
+        a.add_url_rule("/api/v1/orders/intervene", "orders_intervene", self._orders_intervene, methods=["POST"])
+        a.add_url_rule("/api/v1/intervention/history", "intervention_history", self._intervention_history)
 
         # API v1 - 自愈
         a.add_url_rule("/api/v1/selfheal/status", "selfheal_status", self._selfheal_status)
@@ -127,6 +136,122 @@ class Web面板:
         if self._db:
             return ok(self._db.读取配置("llm_status", {"mode": "unknown"}))
         return ok({"mode": "unknown"})
+
+    # ======================== API v1: LLM 决策日志 ========================
+
+    def _llm_history(self):
+        """最近 LLM 决策记录（指挥台流水）"""
+        if not self._db:
+            return ok([])
+        return ok(self._db.查询LLM决策(limit=50))
+
+    # ======================== API v1: 操作员↔LLM 对话 ========================
+
+    def _chat_history(self):
+        """对话历史"""
+        if not self._记忆:
+            return ok([])
+        return ok(self._记忆.取对话历史(50))
+
+    def _chat_send(self):
+        """操作员发消息给 LLM，LLM 回复（可附带待确认指令）"""
+        d = request.get_json(silent=True) or {}
+        content = d.get("content", "").strip()
+        if not content:
+            return fail(400, "消息不能为空")
+        if not self._llm or not self._db:
+            return fail(400, "LLM 或数据库未启用")
+
+        # 1. 记录操作员消息
+        self._db.记录对话("operator", content)
+        # 2. 构建带记忆的上下文
+        prompt = self._记忆.构建上下文(content) if self._记忆 else content
+        # 3. 调 LLM（半自动：生成指令但不直接下发）
+        from 机器人.robot_base import RobotOrder
+        对话提示词 = """你是调度大脑，回答操作员的调度问题。
+如需要执行操作，输出 JSON 数组: [{"type":"指令类型","robot_id":"机器人ID","params":{},"priority":0-3}]
+不需要执行时输出空数组 []。回复要简洁中文。"""
+        try:
+            结果 = self._llm._llm决策(
+                {"robots": [], "events": [{"type": "对话", "label": "对话", "data": {"提示": prompt}}]},
+                system=对话提示词,
+            )
+        except Exception as e:
+            return fail(500, f"LLM 调用失败: {e}")
+
+        # 4. 解析回复：取非指令文本 + 指令
+        指令列表 = []
+        回复文本 = content  # 占位
+        if 结果:
+            for o in 结果:
+                指令列表.append({
+                    "type": o.type, "robot_id": o.params.get("robot_id", ""),
+                    "params": o.params, "priority": o.priority,
+                })
+
+        # 简化：LLM 回复文本用第一句说明
+        回复文本 = "已理解。"
+        if 指令列表:
+            self._db.记录对话("llm", 回复文本, 指令列表)
+            # 半自动：指令进待确认队列
+            for 指令 in 指令列表:
+                if 指令.get("robot_id"):
+                    self._db.添加待确认(指令["robot_id"], 指令, source="llm")
+            return ok({"reply": 回复文本, "orders": 指令列表, "pending": True})
+        self._db.记录对话("llm", 回复文本, [])
+        return ok({"reply": 回复文本, "orders": []})
+
+    # ======================== API v1: 待确认 / 接管 ========================
+
+    def _orders_pending(self):
+        """待确认指令列表（对话转指令/接管）"""
+        if not self._db:
+            return ok([])
+        return ok(self._db.查询待确认(20))
+
+    def _orders_confirm(self):
+        """确认/拒绝/修改待确认指令"""
+        d = request.get_json(silent=True) or {}
+        pid = d.get("id")
+        action = d.get("action", "confirm")  # confirm / reject / modified
+        if not pid:
+            return fail(400, "缺少指令 id")
+        if not self._db:
+            return fail(400, "数据库未启用")
+        if action == "modified":
+            new_order = d.get("order", {})
+            self._db.处理待确认(pid, "modified", new_order)
+        else:
+            self._db.处理待确认(pid, "confirmed" if action == "confirm" else "rejected")
+        # 审计
+        self._db.记录干预(f"待确认_{action}", order={"id": pid})
+        return ok(None, f"指令已{action}")
+
+    def _orders_intervene(self):
+        """操作员接管：拦截 LLM 决策并发布新指令"""
+        d = request.get_json(silent=True) or {}
+        robot_id = d.get("robot_id", "")
+        指令 = d.get("command", "")
+        params = d.get("params", {})
+        reason = d.get("reason", "")
+        if not robot_id or not 指令:
+            return fail(400, "缺少 robot_id 或 command")
+        from 机器人.robot_base import RobotOrder
+        order = RobotOrder(
+            order_id=f"op_{int(time.time())}", type=指令,
+            params=params, priority=3, source="operator")
+        ok_result = self._comm.发送指令(robot_id, order)
+        # 审计
+        self._db.记录干预("人工接管", robot_id, {
+            "type": 指令, "params": params,
+        }, reason)
+        return ok({"ok": ok_result, "robot_id": robot_id, "command": 指令})
+
+    def _intervention_history(self):
+        """干预审计日志"""
+        if not self._db:
+            return ok([])
+        return ok(self._db.查询干预日志(50))
 
     # ======================== API v1: 自愈 ========================
 

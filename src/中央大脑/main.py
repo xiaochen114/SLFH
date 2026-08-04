@@ -13,6 +13,7 @@ from 中央大脑.数据库 import 数据库
 from 中央大脑.监控告警 import 监控告警
 from 中央大脑.检测服务 import 检测服务
 from 中央大脑.运维自愈 import 运维自愈
+from 中央大脑.记忆管理器 import 记忆管理器
 from 中央大脑.自主巡逻 import 自主巡逻
 from 机器人.感知主机控制 import 感知主机控制
 from 机器人.robot_base import RobotOrder
@@ -35,6 +36,7 @@ class 中央大脑:
         )
         self.scheduler = 任务规划器()
         self.告警 = 监控告警(self.事件总线, self.db)
+        self.记忆 = 记忆管理器(self.db)
         self._running = False
 
         # 运维自愈（规则诊断优先，LLM增强）
@@ -67,7 +69,7 @@ class 中央大脑:
         self.web = Web面板(
             self.registry, self.comm, self.db, self.告警, self.事件总线,
             web_host, web_port, patrol=self.patrol, llm=self.llm,
-            自愈=self.自愈,
+            自愈=self.自愈, 记忆=self.记忆, 大脑=self,
         )
 
     def 启动(self):
@@ -152,7 +154,21 @@ class 中央大脑:
                     "robots": self.registry.导出全景().get("robots", []),
                     "events": events,
                 }
+                import time as _t
+                _start = _t.time()
                 orders = self.llm.决策(ctx)
+                _latency = int((_t.time() - _start) * 1000)
+                # 记录 LLM 决策（记忆来源 + 审计）
+                llm状态 = self.llm.获取状态()
+                mode = "rule" if llm状态.get("降级中") or llm状态.get("mode") == "rule" else "llm"
+                order_list = [
+                    {"type": o.type, "robot_id": o.order_id, "priority": o.priority}
+                    for o in orders
+                ]
+                self.db.记录LLM决策(mode, events, ctx["robots"], order_list, _latency)
+                self.事件总线.发布("llm_decision", {
+                    "mode": mode, "orders": order_list, "latency_ms": _latency,
+                })
                 if orders:
                     for o in self.scheduler.规划(orders):
                         for r in self.registry.获取所有机器人():

@@ -39,6 +39,7 @@ E:\zy\
 │   │   ├── 监控告警.py        # 异常检测（低电量/断连/健康）
 │   │   ├── 检测服务.py        # YOLO 检测服务（事件入数据库）
 │   │   ├── 运维自愈.py        # 自愈框架（诊断器+高危闸门+LLM增强）
+│   │   ├── 记忆管理器.py      # LLM 对话记忆（历史拼接，可升级RAG）
 │   │   ├── 诊断脚本_感知主机.py # 感知主机诊断器
 │   │   ├── 诊断脚本_绝影.py    # 绝影诊断器
 │   │   ├── 自主巡逻.py        # 巡逻调度器
@@ -109,6 +110,13 @@ python 主控.py --patrol
 | `POST /api/v1/patrol/start` | 开始巡逻 |
 | `POST /api/v1/patrol/stop` | 停止巡逻 |
 | `GET /api/v1/llm/status` | LLM 连接状态 |
+| `GET /api/v1/llm/history` | LLM 决策记录（流水）|
+| `GET /api/v1/chat/history` | 操作员↔LLM 对话历史 |
+| `POST /api/v1/chat/send` | 发送对话给 LLM（可生成待确认指令）|
+| `GET /api/v1/orders/pending` | 待确认指令 |
+| `POST /api/v1/orders/confirm` | 确认/拒绝待确认指令 |
+| `POST /api/v1/orders/intervene` | 人工接管下发指令 |
+| `GET /api/v1/intervention/history` | 干预审计日志 |
 | `GET /api/v1/selfheal/status` | 自愈系统状态 |
 | `GET /api/v1/selfheal/pending` | 待确认高危操作 |
 | `POST /api/v1/selfheal/confirm` | 确认/拒绝高危操作 |
