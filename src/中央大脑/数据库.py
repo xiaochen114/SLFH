@@ -183,13 +183,19 @@ class 数据库:
             conn.close()
             return [dict(r) for r in rows]
 
-    def 清理旧历史(self, keep_hours=72):
-        """清理超过 keep_hours 的旧数据"""
+    def 清理旧历史(self, keep_hours=72, 高危保留小时=720, 普通保留小时=168):
+        """清理超过保留时长的旧数据。
+        告警按等级：高危(720h=30天) / 普通(168h=7天)"""
         cutoff = time.time() - keep_hours * 3600
+        高危_cutoff = time.time() - 高危保留小时 * 3600
+        普通_cutoff = time.time() - 普通保留小时 * 3600
         with self._锁:
             conn = self._连接()
             conn.execute("DELETE FROM robot_history WHERE timestamp < ?", (cutoff,))
             conn.execute("DELETE FROM patrol_log WHERE started_at < ?", (cutoff,))
+            # 告警分等级清理：error 保留久，warning/info 保留短
+            conn.execute("DELETE FROM alerts WHERE created_at < ? AND level='error'", (高危_cutoff,))
+            conn.execute("DELETE FROM alerts WHERE created_at < ? AND level != 'error'", (普通_cutoff,))
             conn.commit()
             conn.close()
 

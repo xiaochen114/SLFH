@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """监控告警引擎 — 订阅事件总线，检测异常并推送告警"""
-import time
-from datetime import datetime
+import time, threading
 
 
 class 监控告警:
@@ -75,33 +74,36 @@ class 监控告警:
         })
 
     def _触发告警(self, alert):
-        """记录告警并广播"""
+        """即时广播（SSE）+ 异步持久化（数据库）"""
+        # 0. 内存即时缓存（供 SSE/统计，重启即清）
         self._告警历史.append(alert)
         if len(self._告警历史) > 500:
             self._告警历史 = self._告警历史[-250:]
 
-        # 打印
-        level_map = {"error": "✗", "warning": "!", "info": "i"}
-        print(f"[告警][{level_map.get(alert['level'],'?')}] {alert['message']}")
-
-        # 持久化到独立告警表
-        if self._db:
-            try:
-                self._db.保存告警(
-                    type=alert.get("type", "alert"),
-                    level=alert.get("level", "info"),
-                    robot_id=alert.get("robot_id"),
-                    message=alert.get("message", ""),
-                    data=alert,
-                )
-            except:
-                pass
-
-        # SSE 广播
+        # 1. 即时通道：SSE 广播，毫秒级推给前端
         try:
             self._bus.发布("alert", alert)
         except:
             pass
+
+        # 2. 持久通道：异步写数据库，不阻塞即时广播
+        if self._db:
+            threading.Thread(
+                target=self._持久化告警, args=(alert,), daemon=True
+            ).start()
+
+    def _持久化告警(self, alert):
+        """后台线程写数据库，失败不阻塞主流程"""
+        try:
+            self._db.保存告警(
+                type=alert.get("type", "alert"),
+                level=alert.get("level", "info"),
+                robot_id=alert.get("robot_id"),
+                message=alert.get("message", ""),
+                data=alert,
+            )
+        except Exception as e:
+            print(f"[告警] 持久化失败: {e}")
 
     def 获取告警(self, limit=50, level=None):
         """获取最近的告警（优先数据库，重启不丢）"""
