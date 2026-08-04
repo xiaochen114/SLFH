@@ -193,6 +193,8 @@ class 数据库:
             conn = self._连接()
             conn.execute("DELETE FROM robot_history WHERE timestamp < ?", (cutoff,))
             conn.execute("DELETE FROM patrol_log WHERE started_at < ?", (cutoff,))
+            # 事件队列保留 7 天（含已消费的历史事件）
+            conn.execute("DELETE FROM events WHERE created_at < ?", (普通_cutoff,))
             # 告警分等级清理：error 保留久，warning/info 保留短
             conn.execute("DELETE FROM alerts WHERE created_at < ? AND level='error'", (高危_cutoff,))
             conn.execute("DELETE FROM alerts WHERE created_at < ? AND level != 'error'", (普通_cutoff,))
@@ -279,6 +281,31 @@ class 数据库:
             conn.commit()
             conn.close()
             # 解析 data_json，合并进事件 dict
+            result = []
+            for r in rows:
+                d = dict(r)
+                d.update(json.loads(d.pop("data_json", "{}") or "{}"))
+                result.append(d)
+            return result
+
+    def 查询事件历史(self, source=None, type=None, limit=50):
+        """只读查询事件（不标记消费），用于历史回看"""
+        with self._锁:
+            conn = self._连接()
+            sql = "SELECT * FROM events"
+            conds, params = [], []
+            if source:
+                conds.append("source=?")
+                params.append(source)
+            if type:
+                conds.append("type=?")
+                params.append(type)
+            if conds:
+                sql += " WHERE " + " AND ".join(conds)
+            sql += " ORDER BY id DESC LIMIT ?"
+            params.append(limit)
+            rows = conn.execute(sql, params).fetchall()
+            conn.close()
             result = []
             for r in rows:
                 d = dict(r)

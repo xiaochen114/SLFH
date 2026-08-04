@@ -100,7 +100,9 @@ class 运维自愈:
 
     def _执行修复(self, 修复, ssh_cfg, robot_id, 验证列表=None):
         动作 = 修复["动作"]
-        if self._闸门.判断(动作):
+        # 高危判定: 诊断器声明的高危 或 闸门关键字命中
+        是否高危 = 修复.get("级别") == "高危" or self._闸门.判断(动作)
+        if 是否高危:
             with self._锁:
                 self._待确认.append({"动作": 动作, "robot": robot_id, "时间": time.time()})
             self._记录("高危待确认", {"robot": robot_id, "动作": 动作})
@@ -150,7 +152,9 @@ class 运维自愈:
                     命令 = o.params.get("command", "")
                     if 命令:
                         print(f"[自愈] LLM建议修复: {命令}")
-                        return {"动作": 命令, "级别": "低危"}
+                        # 级别由闸门判定，高危命令仍需人工确认
+                        return {"动作": 命令,
+                                "级别": "高危" if self._闸门.判断(命令) else "低危"}
             return None
         except Exception as e:
             print(f"[自愈] LLM诊断失败: {e}")

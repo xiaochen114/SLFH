@@ -333,11 +333,24 @@ class Web面板:
         return fail(400, result.get("msg", "操作失败"))
 
     def _selfheal_history(self):
-        """自愈历史"""
+        """自愈历史（数据库持久 + 内存即时）"""
         if not self._自愈:
             return ok([])
         limit = int(request.args.get("limit", 50))
-        return ok(self._自愈.获取历史(limit))
+        # 数据库历史（重启不丢）
+        库历史 = self._db.查询事件历史(source="self_heal", limit=limit) if self._db else []
+        # 内存即时历史
+        内存历史 = self._自愈.获取历史(limit)
+        # 合并去重（按 time）
+        seen = set()
+        合并 = []
+        for e in 库历史 + 内存历史:
+            key = (e.get("label", ""), e.get("time", e.get("created_at", 0)))
+            if key in seen:
+                continue
+            seen.add(key)
+            合并.append(e)
+        return ok(合并[:limit])
 
     def _api_status(self):
         return ok(self._registry.导出全景())
